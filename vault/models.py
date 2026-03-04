@@ -98,6 +98,7 @@ class TeamSkillsSet(BaseModel):
 class EmployeeSkill(BaseModel):
     name: str
     description: Optional[str] = None
+    content: Optional[str] = None
 
 
 # --- Skill file models ---

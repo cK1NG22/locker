@@ -2,6 +2,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException
 
+from vault.crypto import decrypt
 from vault.db import get_db
 from vault.models import EmployeeSkill
 
@@ -30,14 +31,14 @@ async def get_employee_skills(
     team = await _require_team_token(x_team_token)
     db = get_db()
     cursor = await db.execute(
-        "SELECT s.name, s.description FROM skills s "
+        "SELECT s.name, s.description, s.visibility, s.content FROM skills s "
         "JOIN team_skills ts ON s.id = ts.skill_id "
-        "WHERE ts.team_id = ?",
+        "WHERE ts.team_id = ? AND s.visibility != 'hidden'",
         (team["id"],),
     )
     rows = await cursor.fetchall()
-    skills = [
-        EmployeeSkill(name=row["name"], description=row["description"])
-        for row in rows
-    ]
+    skills = []
+    for row in rows:
+        content = decrypt(row["content"]) if row["visibility"] == "open" else None
+        skills.append(EmployeeSkill(name=row["name"], description=row["description"], content=content))
     return {"team": team["name"], "skills": skills}

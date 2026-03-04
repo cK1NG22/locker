@@ -32,12 +32,12 @@ async def _setup_team_with_skills(client):
     """Create a team with 2 skills (one with description, one without) and return team token."""
     s1 = await client.post(
         "/api/v1/skills",
-        json={"name": "legal-brief", "content": "secret", "description": "Generates legal briefs"},
+        json={"name": "legal-brief", "content": "secret", "description": "Generates legal briefs", "visibility": "shared"},
         headers=ADMIN,
     )
     s2 = await client.post(
         "/api/v1/skills",
-        json={"name": "contract-review", "content": "secret2"},
+        json={"name": "contract-review", "content": "secret2", "visibility": "shared"},
         headers=ADMIN,
     )
     team = await client.post(
@@ -84,7 +84,7 @@ async def test_employee_skills_no_content_returned(client):
         "/api/v1/employee/skills", headers={"X-Team-Token": token}
     )
     for skill in r.json()["skills"]:
-        assert "content" not in skill
+        assert skill.get("content") is None
 
 
 @pytest.mark.asyncio
@@ -122,3 +122,67 @@ async def test_employee_no_admin_key_needed(client):
         "/api/v1/employee/skills", headers={"X-Team-Token": token}
     )
     assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_visibility_hidden_skill_not_returned(client):
+    skill = await client.post(
+        "/api/v1/skills",
+        json={"name": "secret-skill", "content": "top secret", "visibility": "hidden"},
+        headers=ADMIN,
+    )
+    team = await client.post("/api/v1/teams", json={"name": "T1"}, headers=ADMIN)
+    team_data = team.json()
+    await client.put(
+        f"/api/v1/teams/{team_data['id']}/skills",
+        json={"skill_ids": [skill.json()["id"]]},
+        headers=ADMIN,
+    )
+    r = await client.get("/api/v1/employee/skills", headers={"X-Team-Token": team_data["token"]})
+    assert r.status_code == 200
+    names = [s["name"] for s in r.json()["skills"]]
+    assert "secret-skill" not in names
+
+
+@pytest.mark.asyncio
+async def test_visibility_shared_skill_no_content(client):
+    skill = await client.post(
+        "/api/v1/skills",
+        json={"name": "shared-skill", "content": "the prompt", "description": "A shared skill", "visibility": "shared"},
+        headers=ADMIN,
+    )
+    team = await client.post("/api/v1/teams", json={"name": "T2"}, headers=ADMIN)
+    team_data = team.json()
+    await client.put(
+        f"/api/v1/teams/{team_data['id']}/skills",
+        json={"skill_ids": [skill.json()["id"]]},
+        headers=ADMIN,
+    )
+    r = await client.get("/api/v1/employee/skills", headers={"X-Team-Token": team_data["token"]})
+    assert r.status_code == 200
+    skills = {s["name"]: s for s in r.json()["skills"]}
+    assert "shared-skill" in skills
+    assert skills["shared-skill"]["description"] == "A shared skill"
+    assert skills["shared-skill"]["content"] is None
+
+
+@pytest.mark.asyncio
+async def test_visibility_open_skill_has_content(client):
+    skill = await client.post(
+        "/api/v1/skills",
+        json={"name": "open-skill", "content": "the full prompt", "description": "An open skill", "visibility": "open"},
+        headers=ADMIN,
+    )
+    team = await client.post("/api/v1/teams", json={"name": "T3"}, headers=ADMIN)
+    team_data = team.json()
+    await client.put(
+        f"/api/v1/teams/{team_data['id']}/skills",
+        json={"skill_ids": [skill.json()["id"]]},
+        headers=ADMIN,
+    )
+    r = await client.get("/api/v1/employee/skills", headers={"X-Team-Token": team_data["token"]})
+    assert r.status_code == 200
+    skills = {s["name"]: s for s in r.json()["skills"]}
+    assert "open-skill" in skills
+    assert skills["open-skill"]["description"] == "An open skill"
+    assert skills["open-skill"]["content"] == "the full prompt"
