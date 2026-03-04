@@ -1,23 +1,28 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Literal, Optional, List
+
+Visibility = Literal["hidden", "shared", "open"]
 
 
 class SkillCreate(BaseModel):
     name: str
     content: str
     description: Optional[str] = None
+    visibility: Visibility = "hidden"
 
 
 class SkillUpdate(BaseModel):
     name: Optional[str] = None
     content: Optional[str] = None
     description: Optional[str] = None
+    visibility: Optional[Visibility] = None
 
 
 class SkillMeta(BaseModel):
     id: str
     name: str
     description: Optional[str] = None
+    visibility: str
     file_count: int = 0
     created_at: str
     updated_at: str
@@ -28,6 +33,7 @@ class SkillFull(BaseModel):
     name: str
     content: str
     description: Optional[str] = None
+    visibility: str
     files: List["SkillFileMeta"] = []
     created_at: str
     updated_at: str
@@ -36,12 +42,14 @@ class SkillFull(BaseModel):
 class SkillCreated(BaseModel):
     id: str
     name: str
+    visibility: str
     created_at: str
 
 
 class SkillUpdated(BaseModel):
     id: str
     name: str
+    visibility: str
     updated_at: str
 
 
@@ -115,4 +123,5 @@ class SkillFolderDeploy(BaseModel):
     name: str
     content: str
     description: Optional[str] = None
+    visibility: Visibility = "hidden"
     files: List[SkillFileCreate]

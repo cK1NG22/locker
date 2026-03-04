@@ -36,15 +36,15 @@ async def create_skill(body: SkillCreate):
     db = get_db()
     try:
         await db.execute(
-            "INSERT INTO skills (id, name, content, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (skill_id, body.name, encrypted, body.description, now, now),
+            "INSERT INTO skills (id, name, content, description, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (skill_id, body.name, encrypted, body.description, body.visibility, now, now),
         )
         await db.commit()
     except Exception as e:
         if "UNIQUE constraint failed" in str(e):
             raise HTTPException(status_code=409, detail=f"Skill '{body.name}' already exists")
         raise
-    return SkillCreated(id=skill_id, name=body.name, created_at=now)
+    return SkillCreated(id=skill_id, name=body.name, visibility=body.visibility, created_at=now)
 
 
 @router.get("/skills/bundle")
@@ -64,7 +64,7 @@ async def list_skills(name: Optional[str] = Query(default=None)):
     db = get_db()
     if name is not None:
         cursor = await db.execute(
-            "SELECT id, name, content, description, created_at, updated_at FROM skills WHERE name = ?",
+            "SELECT id, name, content, description, visibility, created_at, updated_at FROM skills WHERE name = ?",
             (name,),
         )
         row = await cursor.fetchone()
@@ -84,12 +84,13 @@ async def list_skills(name: Optional[str] = Query(default=None)):
             name=row["name"],
             content=decrypt(row["content"]),
             description=row["description"],
+            visibility=row["visibility"],
             files=files,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
     cursor = await db.execute(
-        """SELECT s.id, s.name, s.description, s.created_at, s.updated_at,
+        """SELECT s.id, s.name, s.description, s.visibility, s.created_at, s.updated_at,
                   COUNT(sf.id) AS file_count
            FROM skills s
            LEFT JOIN skill_files sf ON sf.skill_id = s.id
@@ -101,6 +102,7 @@ async def list_skills(name: Optional[str] = Query(default=None)):
             id=row["id"],
             name=row["name"],
             description=row["description"],
+            visibility=row["visibility"],
             file_count=row["file_count"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
@@ -114,7 +116,7 @@ async def list_skills(name: Optional[str] = Query(default=None)):
 async def get_skill(skill_id: str):
     db = get_db()
     cursor = await db.execute(
-        "SELECT id, name, content, description, created_at, updated_at FROM skills WHERE id = ?",
+        "SELECT id, name, content, description, visibility, created_at, updated_at FROM skills WHERE id = ?",
         (skill_id,),
     )
     row = await cursor.fetchone()
@@ -134,6 +136,7 @@ async def get_skill(skill_id: str):
         name=row["name"],
         content=decrypt(row["content"]),
         description=row["description"],
+        visibility=row["visibility"],
         files=files,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -142,11 +145,11 @@ async def get_skill(skill_id: str):
 
 @router.put("/skills/{skill_id}", response_model=SkillUpdated)
 async def update_skill(skill_id: str, body: SkillUpdate):
-    if body.name is None and body.content is None and body.description is None:
+    if body.name is None and body.content is None and body.description is None and body.visibility is None:
         raise HTTPException(status_code=422, detail="At least one field required")
     db = get_db()
     cursor = await db.execute(
-        "SELECT id, name, content, description FROM skills WHERE id = ?", (skill_id,)
+        "SELECT id, name, content, description, visibility FROM skills WHERE id = ?", (skill_id,)
     )
     row = await cursor.fetchone()
     if row is None:
@@ -154,13 +157,14 @@ async def update_skill(skill_id: str, body: SkillUpdate):
     new_name = body.name if body.name is not None else row["name"]
     new_content = encrypt(body.content) if body.content is not None else row["content"]
     new_description = body.description if body.description is not None else row["description"]
+    new_visibility = body.visibility if body.visibility is not None else row["visibility"]
     now = _now()
     await db.execute(
-        "UPDATE skills SET name = ?, content = ?, description = ?, updated_at = ? WHERE id = ?",
-        (new_name, new_content, new_description, now, skill_id),
+        "UPDATE skills SET name = ?, content = ?, description = ?, visibility = ?, updated_at = ? WHERE id = ?",
+        (new_name, new_content, new_description, new_visibility, now, skill_id),
     )
     await db.commit()
-    return SkillUpdated(id=skill_id, name=new_name, updated_at=now)
+    return SkillUpdated(id=skill_id, name=new_name, visibility=new_visibility, updated_at=now)
 
 
 @router.delete("/skills/{skill_id}", status_code=204)
@@ -268,8 +272,8 @@ async def deploy_folder(body: SkillFolderDeploy):
     db = get_db()
     try:
         await db.execute(
-            "INSERT INTO skills (id, name, content, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (skill_id, body.name, encrypted_content, body.description, now, now),
+            "INSERT INTO skills (id, name, content, description, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (skill_id, body.name, encrypted_content, body.description, body.visibility, now, now),
         )
     except Exception as e:
         if "UNIQUE constraint failed" in str(e):
