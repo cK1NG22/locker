@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 export interface Skill {
   name: string;
   description: string | null;
+  content: string | null;
 }
 
 interface SkillsResponse {
