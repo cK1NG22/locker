@@ -52,7 +52,7 @@
   Files: `companion/src/components/SkillList.tsx`, `companion/src/components/SkillItem.tsx`, `companion/src/hooks/useSkills.ts`
   `blocked-by: 2.2`
 
-- [ ] **2.4: Add locker sync CLI command**
+- [x] **2.4: Add locker sync CLI command**
   New CLI command: pulls `shared`/`open` skills from vault via employee API (team token auth), writes .md files to `~/.claude/commands/`. Overwrites on re-sync. Clear output showing what was synced.
   Files: `cli/main.py`, new `cli/sync.py`, `tests/test_cli.py`
   `blocked-by: 2.2`

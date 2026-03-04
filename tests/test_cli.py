@@ -23,7 +23,7 @@ def test_successful_deploy(tmp_path, monkeypatch):
         respx.post(f"{VAULT_URL}/api/v1/skills").mock(
             return_value=httpx.Response(201, json=SKILL_RESPONSE)
         )
-        result = runner.invoke(app, [str(skill_file)])
+        result = runner.invoke(app, ["deploy", str(skill_file)])
 
     assert result.exit_code == 0
     assert 'Deployed skill "email-style" (id: abc123)' in result.output
@@ -33,7 +33,7 @@ def test_file_not_found(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
     monkeypatch.setenv("LOCKER_API_KEY", API_KEY)
 
-    result = runner.invoke(app, [str(tmp_path / "missing.txt")])
+    result = runner.invoke(app, ["deploy", str(tmp_path / "missing.txt")])
 
     assert result.exit_code == 1
     assert "missing.txt" in result.output
@@ -46,7 +46,7 @@ def test_missing_vault_url(tmp_path, monkeypatch):
     skill_file = tmp_path / "test.txt"
     skill_file.write_text("content")
 
-    result = runner.invoke(app, [str(skill_file)])
+    result = runner.invoke(app, ["deploy", str(skill_file)])
 
     assert result.exit_code == 1
     assert "LOCKER_VAULT_URL" in result.output
@@ -59,7 +59,7 @@ def test_missing_api_key(tmp_path, monkeypatch):
     skill_file = tmp_path / "test.txt"
     skill_file.write_text("content")
 
-    result = runner.invoke(app, [str(skill_file)])
+    result = runner.invoke(app, ["deploy", str(skill_file)])
 
     assert result.exit_code == 1
     assert "LOCKER_API_KEY" in result.output
@@ -76,7 +76,7 @@ def test_server_returns_409(tmp_path, monkeypatch):
         respx.post(f"{VAULT_URL}/api/v1/skills").mock(
             return_value=httpx.Response(409, json={"detail": "Skill name already exists"})
         )
-        result = runner.invoke(app, [str(skill_file)])
+        result = runner.invoke(app, ["deploy", str(skill_file)])
 
     assert result.exit_code == 1
     assert "409" in result.output
@@ -93,7 +93,7 @@ def test_server_returns_401(tmp_path, monkeypatch):
         respx.post(f"{VAULT_URL}/api/v1/skills").mock(
             return_value=httpx.Response(401, json={"detail": "Invalid API key"})
         )
-        result = runner.invoke(app, [str(skill_file)])
+        result = runner.invoke(app, ["deploy", str(skill_file)])
 
     assert result.exit_code == 1
     assert "401" in result.output
@@ -129,7 +129,7 @@ def test_folder_deploy_success(tmp_path, monkeypatch):
         route = respx.post(f"{VAULT_URL}/api/v1/skills/deploy-folder").mock(
             return_value=httpx.Response(201, json=FOLDER_RESPONSE)
         )
-        result = runner.invoke(app, [str(folder)])
+        result = runner.invoke(app, ["deploy", str(folder)])
 
     assert result.exit_code == 0
     assert "my-skill" in result.output
@@ -151,7 +151,7 @@ def test_folder_deploy_missing_sibling_md(tmp_path, monkeypatch):
     folder.mkdir()
     (folder / "somefile.txt").write_text("content")
 
-    result = runner.invoke(app, [str(folder)])
+    result = runner.invoke(app, ["deploy", str(folder)])
 
     assert result.exit_code == 1
     assert "no-md.md" in result.output
@@ -161,7 +161,7 @@ def test_folder_deploy_missing_folder(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
     monkeypatch.setenv("LOCKER_API_KEY", API_KEY)
 
-    result = runner.invoke(app, [str(tmp_path / "nonexistent")])
+    result = runner.invoke(app, ["deploy", str(tmp_path / "nonexistent")])
 
     assert result.exit_code == 1
 
@@ -178,7 +178,153 @@ def test_single_file_deploy_still_works(tmp_path, monkeypatch):
         respx.post(f"{VAULT_URL}/api/v1/skills").mock(
             return_value=httpx.Response(201, json=SKILL_RESPONSE)
         )
-        result = runner.invoke(app, [str(skill_file)])
+        result = runner.invoke(app, ["deploy", str(skill_file)])
 
     assert result.exit_code == 0
     assert 'Deployed skill "quick-reply"' in result.output
+
+
+# ── Sync tests ────────────────────────────────────────────────────────
+
+TEAM_TOKEN = "test-team-token"
+SYNC_RESPONSE = {
+    "team": "Legal",
+    "skills": [
+        {"name": "email-style", "description": "Write concise emails", "content": "Always be concise."},
+        {"name": "brief-format", "description": "Format legal briefs", "content": "Use IRAC structure."},
+    ],
+}
+MIXED_SYNC_RESPONSE = {
+    "team": "Legal",
+    "skills": [
+        {"name": "open-skill", "description": None, "content": "Open content."},
+        {"name": "shared-skill", "description": "A shared skill", "content": None},
+    ],
+}
+
+
+def test_sync_success(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+    monkeypatch.setenv("LOCKER_TEAM_TOKEN", TEAM_TOKEN)
+
+    with respx.mock:
+        respx.get(f"{VAULT_URL}/api/v1/employee/skills").mock(
+            return_value=httpx.Response(200, json=SYNC_RESPONSE)
+        )
+        result = runner.invoke(app, ["sync", "--output-dir", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "email-style" in result.output
+    assert "brief-format" in result.output
+    assert "Synced 2 skill(s)" in result.output
+    assert (tmp_path / "email-style.md").read_text() == "Always be concise."
+    assert (tmp_path / "brief-format.md").read_text() == "Use IRAC structure."
+
+
+def test_sync_shared_skills_skipped(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+    monkeypatch.setenv("LOCKER_TEAM_TOKEN", TEAM_TOKEN)
+
+    with respx.mock:
+        respx.get(f"{VAULT_URL}/api/v1/employee/skills").mock(
+            return_value=httpx.Response(200, json=MIXED_SYNC_RESPONSE)
+        )
+        result = runner.invoke(app, ["sync", "--output-dir", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "open-skill" in result.output
+    assert "shared-skill" in result.output
+    assert "skipped" in result.output
+    assert (tmp_path / "open-skill.md").exists()
+    assert not (tmp_path / "shared-skill.md").exists()
+    assert "Synced 1 skill(s)" in result.output
+
+
+def test_sync_missing_vault_url(tmp_path, monkeypatch):
+    monkeypatch.delenv("LOCKER_VAULT_URL", raising=False)
+    monkeypatch.setenv("LOCKER_TEAM_TOKEN", TEAM_TOKEN)
+
+    result = runner.invoke(app, ["sync", "--output-dir", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert "LOCKER_VAULT_URL" in result.output
+
+
+def test_sync_missing_team_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+    monkeypatch.delenv("LOCKER_TEAM_TOKEN", raising=False)
+
+    result = runner.invoke(app, ["sync", "--output-dir", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert "LOCKER_TEAM_TOKEN" in result.output
+
+
+def test_sync_server_unreachable(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+    monkeypatch.setenv("LOCKER_TEAM_TOKEN", TEAM_TOKEN)
+
+    with respx.mock:
+        respx.get(f"{VAULT_URL}/api/v1/employee/skills").mock(
+            side_effect=httpx.ConnectError("Connection refused")
+        )
+        result = runner.invoke(app, ["sync", "--output-dir", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert "Error" in result.output
+
+
+def test_sync_unauthorized(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+    monkeypatch.setenv("LOCKER_TEAM_TOKEN", "bad-token")
+
+    with respx.mock:
+        respx.get(f"{VAULT_URL}/api/v1/employee/skills").mock(
+            return_value=httpx.Response(401, json={"detail": "Unauthorized"})
+        )
+        result = runner.invoke(app, ["sync", "--output-dir", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert "401" in result.output
+
+
+def test_sync_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+    monkeypatch.setenv("LOCKER_TEAM_TOKEN", TEAM_TOKEN)
+
+    with respx.mock:
+        respx.get(f"{VAULT_URL}/api/v1/employee/skills").mock(
+            return_value=httpx.Response(200, json=SYNC_RESPONSE)
+        )
+        runner.invoke(app, ["sync", "--output-dir", str(tmp_path)])
+
+    # Second sync with updated content
+    updated_response = {
+        "team": "Legal",
+        "skills": [{"name": "email-style", "description": None, "content": "Updated content."}],
+    }
+    with respx.mock:
+        respx.get(f"{VAULT_URL}/api/v1/employee/skills").mock(
+            return_value=httpx.Response(200, json=updated_response)
+        )
+        result = runner.invoke(app, ["sync", "--output-dir", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert (tmp_path / "email-style.md").read_text() == "Updated content."
+
+
+def test_sync_creates_output_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+    monkeypatch.setenv("LOCKER_TEAM_TOKEN", TEAM_TOKEN)
+
+    new_dir = tmp_path / "nested" / "commands"
+    assert not new_dir.exists()
+
+    with respx.mock:
+        respx.get(f"{VAULT_URL}/api/v1/employee/skills").mock(
+            return_value=httpx.Response(200, json=SYNC_RESPONSE)
+        )
+        result = runner.invoke(app, ["sync", "--output-dir", str(new_dir)])
+
+    assert result.exit_code == 0
+    assert new_dir.exists()
