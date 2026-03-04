@@ -11,6 +11,9 @@ from vault.team_routes import router as team_router
 from vault.employee_routes import router as employee_router
 from proxy.routes import router as proxy_router
 from locker_mcp.routes import router as mcp_router
+from locker_mcp.sse_server import mcp_routes
+
+from starlette.routing import Route, Mount
 
 
 @asynccontextmanager
@@ -20,7 +23,7 @@ async def lifespan(app: FastAPI):
     await close_db()
 
 
-app = FastAPI(title="Locker", lifespan=lifespan)
+app = FastAPI(title="Locker", lifespan=lifespan, routes=mcp_routes)
 
 
 @app.get("/health")

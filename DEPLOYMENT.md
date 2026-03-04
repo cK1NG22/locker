@@ -71,6 +71,32 @@ curl -H "X-API-Key: your-admin-api-key" http://localhost:8000/api/v1/skills
 5. Copy the team token and share it with employees
 6. Employees open the companion page, paste the token, and see their assigned skills
 
+## Connecting employees via Claude Code (SSE MCP)
+
+Employees add Locker to their Claude Code by creating `~/.claude.json` (or editing it if it exists):
+
+```json
+{
+  "mcpServers": {
+    "locker": {
+      "type": "sse",
+      "url": "https://your-locker-server.com/mcp",
+      "headers": {
+        "X-Team-Token": "their-team-token"
+      }
+    }
+  }
+}
+```
+
+Then install the `/locker` skill router:
+
+```bash
+curl -o ~/.claude/commands/locker.md https://raw.githubusercontent.com/ck22coding/locker-skill/main/locker.md
+```
+
+After restarting Claude Code, employees can type `/locker <skill-name>` to use any open skill.
+
 ## Environment variables reference
 
 | Variable | Required | Description |

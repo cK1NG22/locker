@@ -61,3 +61,35 @@
   Existing TODO. Returns skill names + descriptions from vault so Claude Code can suggest available skills to the user. Add to MCP server tool registry.
   Files: `locker_mcp/server.py`, `tests/test_mcp.py`
   `blocked-by: none`
+
+- [x] **2.5b: Add fetch_skill MCP tool**
+  Returns full content of an `open` skill by name. Powers the `/locker` thin router — Claude fetches skill content from the server at runtime instead of needing local .md files.
+  Files: `locker_mcp/server.py`
+  `blocked-by: 2.5`
+
+- [x] **2.5c: Server-stored skills dogfood**
+  `/locker` thin router skill deployed to vault. 3 skills (deploy/sync/e2e) stored on server, team "dogfood". Proves skills don't need local `.md` files. GitHub repo for the router skill: https://github.com/ck22coding/locker-skill
+  `blocked-by: 2.5b`
+
+- [x] **2.8: SSE MCP endpoint**
+  `/mcp` SSE endpoint added to FastAPI server so remote users can connect without a local Python install. Uses Python `contextvars` to pass team token per connection. Adam's config: `{"type":"sse","url":"<host>/mcp","headers":{"X-Team-Token":"<token>"}}`.
+  Files: `locker_mcp/sse_server.py`, `main.py`
+  `blocked-by: none`
+
+- [ ] **2.9a: Default skill visibility to open**
+  Change deploy default from `hidden` to `open`. Add `--visibility` flag to `locker deploy` CLI.
+  Files: `cli/main.py`, `vault/routes.py`
+  `blocked-by: none`
+
+- [ ] **2.9b: Zero-friction onboarding: auto MCP config**
+  `locker setup` CLI command writes MCP entry to `~/.claude.json` automatically. User runs one command — no manual JSON editing.
+  Files: `cli/main.py`, new `cli/setup.py`
+  `blocked-by: none`
+
+- [ ] **2.9c: Zero-friction onboarding: invite-based access**
+  Dashboard "Invite Member" flow generates a join link. Recipient clicks → gets a personal API token. Admin sees pending/accepted invites.
+  `blocked-by: none`
+
+- [ ] **2.10: Zero-friction onboarding: auto skill download**
+  `/locker` router skill installs to `~/.claude/commands/locker.md` as part of `locker setup`. One command = MCP config + skill install + token.
+  `blocked-by: 2.9b`

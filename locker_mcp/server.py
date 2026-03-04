@@ -51,6 +51,23 @@ async def list_tools() -> list[types.Tool]:
             description="List available Locker skills for your team.",
             inputSchema={"type": "object", "properties": {}},
         ),
+        types.Tool(
+            name="fetch_skill",
+            description=(
+                "Fetch the full content of an open Locker skill by name. "
+                "Returns the skill's instructions for you to follow directly."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "skill_name": {
+                        "type": "string",
+                        "description": "The name of the skill to fetch",
+                    }
+                },
+                "required": ["skill_name"],
+            },
+        ),
     ]
 
 
@@ -101,6 +118,42 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             desc = skill.get("description") or "No description"
             lines.append(f"- {skill['name']}: {desc}")
         return [types.TextContent(type="text", text="\n".join(lines))]
+
+    elif name == "fetch_skill":
+        skill_name = arguments.get("skill_name", "").strip()
+        if not skill_name:
+            raise ValueError("skill_name is required")
+
+        team_token = os.environ.get("LOCKER_TEAM_TOKEN", "")
+        if not team_token:
+            return [types.TextContent(
+                type="text",
+                text="LOCKER_TEAM_TOKEN is not configured. Ask your admin for a team token.",
+            )]
+
+        async with httpx.AsyncClient() as http:
+            resp = await http.get(
+                f"{vault_url}/api/v1/employee/skills",
+                headers={"X-Team-Token": team_token},
+            )
+            resp.raise_for_status()
+
+        data = resp.json()
+        for skill in data.get("skills", []):
+            if skill["name"] == skill_name:
+                content = skill.get("content")
+                if content is None:
+                    return [types.TextContent(
+                        type="text",
+                        text=f"Skill '{skill_name}' exists but its content is not accessible (visibility may not be 'open').",
+                    )]
+                return [types.TextContent(type="text", text=content)]
+
+        available = [s["name"] for s in data.get("skills", [])]
+        return [types.TextContent(
+            type="text",
+            text=f"Skill '{skill_name}' not found. Available skills: {', '.join(available) or 'none'}",
+        )]
 
     else:
         raise ValueError(f"Unknown tool: {name}")
