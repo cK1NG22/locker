@@ -57,7 +57,7 @@
   Files: `cli/main.py`, new `cli/sync.py`, `tests/test_cli.py`
   `blocked-by: 2.2`
 
-- [ ] **2.5: Add list_skills MCP tool**
+- [x] **2.5: Add list_skills MCP tool**
   Existing TODO. Returns skill names + descriptions from vault so Claude Code can suggest available skills to the user. Add to MCP server tool registry.
   Files: `locker_mcp/server.py`, `tests/test_mcp.py`
   `blocked-by: none`

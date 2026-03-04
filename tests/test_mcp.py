@@ -182,3 +182,114 @@ async def test_proxy_unknown_token_returns_422(client):
     }
     r = await client.post("/proxy/anthropic/v1/messages", json=payload)
     assert r.status_code == 422
+
+
+# --- list_skills MCP tool tests ---
+
+
+async def _setup_team_with_skills(client) -> str:
+    """Create two skills, a team, assign both skills, return the team token."""
+    headers = {"X-API-Key": os.environ["LOCKER_API_KEY"]}
+    s1 = await client.post(
+        "/api/v1/skills",
+        json={"name": "bullets", "content": "Use bullet points.", "description": "Bullet point formatter"},
+        headers=headers,
+    )
+    s2 = await client.post(
+        "/api/v1/skills",
+        json={"name": "summary", "content": "Summarize concisely."},
+        headers=headers,
+    )
+    team = await client.post("/api/v1/teams", json={"name": "Test Team"}, headers=headers)
+    team_data = team.json()
+    await client.put(
+        f"/api/v1/teams/{team_data['id']}/skills",
+        json={"skill_ids": [s1.json()["id"], s2.json()["id"]]},
+        headers=headers,
+    )
+    return team_data["token"]
+
+
+@pytest.mark.asyncio
+async def test_list_skills_returns_names_and_descriptions(client):
+    team_token = await _setup_team_with_skills(client)
+    with respx.mock:
+        respx.get(f"http://localhost:8000/api/v1/employee/skills").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "team": "Test Team",
+                    "skills": [
+                        {"name": "bullets", "description": "Bullet point formatter"},
+                        {"name": "summary", "description": None},
+                    ],
+                },
+            )
+        )
+        with patch.dict(os.environ, {"LOCKER_TEAM_TOKEN": team_token}):
+            from locker_mcp.server import call_tool
+            result = await call_tool("list_skills", {})
+
+    assert len(result) == 1
+    text = result[0].text
+    assert "bullets" in text
+    assert "Bullet point formatter" in text
+    assert "summary" in text
+
+
+@pytest.mark.asyncio
+async def test_list_skills_empty_team(client):
+    headers = {"X-API-Key": os.environ["LOCKER_API_KEY"]}
+    team = await client.post("/api/v1/teams", json={"name": "Empty"}, headers=headers)
+    team_token = team.json()["token"]
+
+    with respx.mock:
+        respx.get(f"http://localhost:8000/api/v1/employee/skills").mock(
+            return_value=httpx.Response(200, json={"team": "Empty", "skills": []})
+        )
+        with patch.dict(os.environ, {"LOCKER_TEAM_TOKEN": team_token}):
+            from locker_mcp.server import call_tool
+            result = await call_tool("list_skills", {})
+
+    assert "No skills" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_list_skills_scoped_to_team(client):
+    """Verify only team's skills appear, not unassigned ones."""
+    headers = {"X-API-Key": os.environ["LOCKER_API_KEY"]}
+    await client.post(
+        "/api/v1/skills",
+        json={"name": "unassigned-skill", "content": "secret"},
+        headers=headers,
+    )
+    team_token = await _setup_team_with_skills(client)
+
+    with respx.mock:
+        respx.get(f"http://localhost:8000/api/v1/employee/skills").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "team": "Test Team",
+                    "skills": [
+                        {"name": "bullets", "description": "Bullet point formatter"},
+                        {"name": "summary", "description": None},
+                    ],
+                },
+            )
+        )
+        with patch.dict(os.environ, {"LOCKER_TEAM_TOKEN": team_token}):
+            from locker_mcp.server import call_tool
+            result = await call_tool("list_skills", {})
+
+    assert "unassigned-skill" not in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_list_skills_no_token_configured(client):
+    env = {k: v for k, v in os.environ.items() if k != "LOCKER_TEAM_TOKEN"}
+    with patch.dict(os.environ, env, clear=True):
+        from locker_mcp.server import call_tool
+        result = await call_tool("list_skills", {})
+
+    assert "LOCKER_TEAM_TOKEN" in result[0].text

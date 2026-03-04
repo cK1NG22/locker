@@ -45,32 +45,65 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["skill_name"],
             },
-        )
+        ),
+        types.Tool(
+            name="list_skills",
+            description="List available Locker skills for your team.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
     ]
 
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-    if name != "use_skill":
-        raise ValueError(f"Unknown tool: {name}")
-
-    skill_name = arguments.get("skill_name", "").strip()
-    if not skill_name:
-        raise ValueError("skill_name is required")
-
-    token = str(uuid.uuid4())
     vault_url = os.environ.get("LOCKER_VAULT_URL", "http://localhost:8000")
-    api_key = os.environ.get("LOCKER_API_KEY", "")
 
-    async with httpx.AsyncClient() as http:
-        resp = await http.post(
-            f"{vault_url}/internal/register-token",
-            json={"token": token, "skill_name": skill_name},
-            headers={"X-API-Key": api_key},
-        )
-        resp.raise_for_status()
+    if name == "use_skill":
+        skill_name = arguments.get("skill_name", "").strip()
+        if not skill_name:
+            raise ValueError("skill_name is required")
 
-    return [types.TextContent(type="text", text=f"[LOCKER_TOKEN:{token}]")]
+        token = str(uuid.uuid4())
+        api_key = os.environ.get("LOCKER_API_KEY", "")
+
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                f"{vault_url}/internal/register-token",
+                json={"token": token, "skill_name": skill_name},
+                headers={"X-API-Key": api_key},
+            )
+            resp.raise_for_status()
+
+        return [types.TextContent(type="text", text=f"[LOCKER_TOKEN:{token}]")]
+
+    elif name == "list_skills":
+        team_token = os.environ.get("LOCKER_TEAM_TOKEN", "")
+        if not team_token:
+            return [types.TextContent(
+                type="text",
+                text="LOCKER_TEAM_TOKEN is not configured. Ask your admin for a team token.",
+            )]
+
+        async with httpx.AsyncClient() as http:
+            resp = await http.get(
+                f"{vault_url}/api/v1/employee/skills",
+                headers={"X-Team-Token": team_token},
+            )
+            resp.raise_for_status()
+
+        data = resp.json()
+        skills = data.get("skills", [])
+        if not skills:
+            return [types.TextContent(type="text", text="No skills are available for your team.")]
+
+        lines = [f"Available skills for team '{data.get('team', '')}':\n"]
+        for skill in skills:
+            desc = skill.get("description") or "No description"
+            lines.append(f"- {skill['name']}: {desc}")
+        return [types.TextContent(type="text", text="\n".join(lines))]
+
+    else:
+        raise ValueError(f"Unknown tool: {name}")
 
 
 async def main() -> None:
