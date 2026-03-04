@@ -36,7 +36,7 @@
 
 ## Phase 2 — Adam's Use Case (Team Skill Sharing)
 
-- [ ] **2.1: Add visibility column to skills table**
+- [x] **2.1: Add visibility column to skills table**
   Add `visibility` column with values: `hidden` (invisible auto-inject, default), `shared` (name+desc only), `open` (full content visible). ALTER TABLE migration, update vault CRUD, update models. Default `hidden` for backward compat.
   Files: `vault/db.py`, `vault/models.py`, `vault/routes.py`, `vault/employee_routes.py`
   Tests: update all existing tests for new field.

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS skills (
     name        TEXT NOT NULL UNIQUE,
     content     TEXT NOT NULL,
     description TEXT,
+    visibility  TEXT NOT NULL DEFAULT 'hidden',
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 )
@@ -55,6 +56,13 @@ async def init_db() -> None:
     await _db.execute(CREATE_TEAMS)
     await _db.execute(CREATE_TEAM_SKILLS)
     await _db.execute(CREATE_SKILL_FILES)
+    # Migrate existing DBs that lack the visibility column
+    try:
+        await _db.execute(
+            "ALTER TABLE skills ADD COLUMN visibility TEXT NOT NULL DEFAULT 'hidden'"
+        )
+    except Exception:
+        pass  # Column already exists
     await _db.commit()
 
 

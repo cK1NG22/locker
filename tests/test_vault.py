@@ -57,8 +57,33 @@ async def test_create_skill(client):
     data = r.json()
     assert "id" in data
     assert data["name"] == "test-skill"
+    assert data["visibility"] == "hidden"
     assert "created_at" in data
     assert "content" not in data
+
+
+@pytest.mark.asyncio
+async def test_create_skill_with_visibility(client):
+    r = await client.post(
+        "/api/v1/skills",
+        json={"name": "open-skill", "content": "visible", "visibility": "open"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    assert r.json()["visibility"] == "open"
+    skill_id = r.json()["id"]
+    fetched = await client.get(f"/api/v1/skills/{skill_id}", headers=HEADERS)
+    assert fetched.json()["visibility"] == "open"
+
+
+@pytest.mark.asyncio
+async def test_create_skill_invalid_visibility(client):
+    r = await client.post(
+        "/api/v1/skills",
+        json={"name": "bad-vis", "content": "x", "visibility": "bogus"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -84,6 +109,7 @@ async def test_list_skills_no_content(client):
     assert any(s["name"] == "list-skill" for s in skills)
     for s in skills:
         assert "content" not in s
+        assert "visibility" in s
 
 
 # --- Get by ID ---
@@ -101,6 +127,7 @@ async def test_get_skill_by_id(client):
     data = r.json()
     assert data["content"] == "fetch me"
     assert data["id"] == skill_id
+    assert data["visibility"] == "hidden"
 
 
 @pytest.mark.asyncio
@@ -123,6 +150,7 @@ async def test_get_skill_by_name(client):
     data = r.json()
     assert data["content"] == "named content"
     assert data["name"] == "named-skill"
+    assert data["visibility"] == "hidden"
 
 
 @pytest.mark.asyncio
@@ -185,6 +213,25 @@ async def test_update_changes_updated_at(client):
         headers=HEADERS,
     )
     assert r.json()["updated_at"] >= original_ts
+
+
+@pytest.mark.asyncio
+async def test_update_visibility(client):
+    create = await client.post(
+        "/api/v1/skills",
+        json={"name": "vis-update-skill", "content": "content"},
+        headers=HEADERS,
+    )
+    skill_id = create.json()["id"]
+    r = await client.put(
+        f"/api/v1/skills/{skill_id}",
+        json={"visibility": "shared"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 200
+    assert r.json()["visibility"] == "shared"
+    fetched = await client.get(f"/api/v1/skills/{skill_id}", headers=HEADERS)
+    assert fetched.json()["visibility"] == "shared"
 
 
 # --- Delete ---
