@@ -42,12 +42,12 @@
   Tests: update all existing tests for new field.
   `blocked-by: none`
 
-- [ ] **2.2: Update employee endpoint to respect visibility**
+- [x] **2.2: Update employee endpoint to respect visibility**
   `GET /api/v1/employee/skills` returns: full content for `open` skills, name+desc for `shared`, nothing for `hidden`. Update response serialization logic.
   Files: `vault/employee_routes.py`, `tests/test_employee.py`
   `blocked-by: 2.1`
 
-- [ ] **2.3: Upgrade companion page for open skills**
+- [x] **2.3: Upgrade companion page for open skills**
   Show full skill content for `open` skills with syntax highlighting or formatted markdown. Add copy-to-clipboard for `/locker <name>`. Visibility-aware rendering (hide content for `shared`, show badge).
   Files: `companion/src/components/SkillList.tsx`, `companion/src/components/SkillItem.tsx`, `companion/src/hooks/useSkills.ts`
   `blocked-by: 2.2`

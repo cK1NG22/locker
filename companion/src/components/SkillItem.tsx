@@ -16,6 +16,8 @@ export default function SkillItem({ skill }: SkillItemProps) {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const isOpen = skill.content !== null;
+
   return (
     <div
       className="border border-gray-200 rounded-md bg-white hover:border-gray-300 transition-colors"
@@ -33,12 +35,18 @@ export default function SkillItem({ skill }: SkillItemProps) {
           </span>
         </div>
 
-        <button
-          onClick={copyCommand}
-          className="shrink-0 ml-3 px-3 py-1 text-xs font-medium rounded border transition-colors bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
-        >
-          {copied ? "Copied!" : "Copy"}
-        </button>
+        {isOpen ? (
+          <button
+            onClick={copyCommand}
+            className="shrink-0 ml-3 px-3 py-1 text-xs font-medium rounded border transition-colors bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        ) : (
+          <span className="shrink-0 ml-3 text-xs text-gray-400 border border-gray-200 rounded px-2 py-1">
+            Content hidden
+          </span>
+        )}
       </div>
 
       {expanded && (
@@ -46,9 +54,16 @@ export default function SkillItem({ skill }: SkillItemProps) {
           <p className="mt-2 text-sm text-gray-600">
             {skill.description || "No description available."}
           </p>
-          <p className="mt-2 text-xs text-gray-400 font-mono">
-            /locker {skill.name}
-          </p>
+          {isOpen && (
+            <>
+              <pre className="mt-2 text-xs font-mono bg-gray-50 rounded p-3 overflow-auto">
+                {skill.content}
+              </pre>
+              <p className="mt-2 text-xs text-gray-400 font-mono">
+                /locker {skill.name}
+              </p>
+            </>
+          )}
         </div>
       )}
     </div>
