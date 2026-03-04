@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "locker"
+version = "0.1.0"
+description = "Enterprise middleware that injects encrypted proprietary skills into LLM calls"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "cryptography>=44.0.0",
+    "aiosqlite>=0.20.0",
+    "typer>=0.15.0",
+    "httpx>=0.28.0",
+    "mcp>=1.0.0",
+]
+
+[project.scripts]
+locker = "cli.main:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+    "httpx>=0.28.0",
+    "respx>=0.22.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["vault", "src", "proxy", "cli", "locker_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
