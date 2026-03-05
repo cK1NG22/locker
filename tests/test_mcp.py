@@ -10,13 +10,24 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from unittest.mock import patch
 
 # Set env vars before importing app
-TEST_API_KEY = "test-api-key-mcp"
+from datetime import datetime, timezone
+
+import jwt as _jwt
+
+TEST_JWT_SECRET = "test-jwt-secret"
 TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
 
-os.environ["LOCKER_API_KEY"] = TEST_API_KEY
+os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
 os.environ["LOCKER_ENCRYPTION_KEY"] = TEST_ENC_KEY
 os.environ["LOCKER_DB_PATH"] = ":memory:"
 os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
+
+_TEST_PAYLOAD = {
+    "sub": "test-user-id",
+    "email": "test@example.com",
+    "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
+}
+TEST_JWT = _jwt.encode(_TEST_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
 
 from main import app  # noqa: E402
 from vault.db import init_db, close_db  # noqa: E402
@@ -46,7 +57,7 @@ async def client():
 
 
 async def _create_skill(client, name: str, content: str) -> str:
-    headers = {"X-API-Key": os.environ["LOCKER_API_KEY"]}
+    headers = {"Authorization": f"Bearer {TEST_JWT}"}
     r = await client.post(
         "/api/v1/skills",
         json={"name": name, "content": content},
@@ -104,7 +115,7 @@ async def test_register_token_valid(client):
     r = await client.post(
         "/internal/register-token",
         json={"token": TOKEN_EP_1, "skill_name": "bullets"},
-        headers={"X-API-Key": os.environ["LOCKER_API_KEY"]},
+        headers={"Authorization": f"Bearer {TEST_JWT}"},
     )
     assert r.status_code == 200
     assert r.json() == {"ok": True}
@@ -189,7 +200,7 @@ async def test_proxy_unknown_token_returns_422(client):
 
 async def _setup_team_with_skills(client) -> str:
     """Create two skills, a team, assign both skills, return the team token."""
-    headers = {"X-API-Key": os.environ["LOCKER_API_KEY"]}
+    headers = {"Authorization": f"Bearer {TEST_JWT}"}
     s1 = await client.post(
         "/api/v1/skills",
         json={"name": "bullets", "content": "Use bullet points.", "description": "Bullet point formatter"},
@@ -239,7 +250,7 @@ async def test_list_skills_returns_names_and_descriptions(client):
 
 @pytest.mark.asyncio
 async def test_list_skills_empty_team(client):
-    headers = {"X-API-Key": os.environ["LOCKER_API_KEY"]}
+    headers = {"Authorization": f"Bearer {TEST_JWT}"}
     team = await client.post("/api/v1/teams", json={"name": "Empty"}, headers=headers)
     team_token = team.json()["token"]
 
@@ -257,7 +268,7 @@ async def test_list_skills_empty_team(client):
 @pytest.mark.asyncio
 async def test_list_skills_scoped_to_team(client):
     """Verify only team's skills appear, not unassigned ones."""
-    headers = {"X-API-Key": os.environ["LOCKER_API_KEY"]}
+    headers = {"Authorization": f"Bearer {TEST_JWT}"}
     await client.post(
         "/api/v1/skills",
         json={"name": "unassigned-skill", "content": "secret"},

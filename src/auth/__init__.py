@@ -1,9 +1,16 @@
-import os
 from typing import Optional
 from fastapi import Header, HTTPException
+from src.auth.jwt import decode_token
+import jwt
 
 
-async def require_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -> None:
-    expected = os.environ.get("LOCKER_API_KEY")
-    if not expected or not x_api_key or x_api_key != expected:
+async def require_user(authorization: Optional[str] = Header(None, alias="Authorization")) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
+    token = authorization.removeprefix("Bearer ")
+    try:
+        return decode_token(token)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")

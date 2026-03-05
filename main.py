@@ -1,13 +1,14 @@
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import re
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from vault.db import init_db, close_db
+from src.auth.oauth import router as auth_router
 from vault.routes import router as vault_router
 from vault.team_routes import router as team_router
 from vault.employee_routes import router as employee_router
@@ -67,6 +68,7 @@ echo "Done! Restart Claude Code, then try: /locker code-review"
     return PlainTextResponse(script, media_type="text/plain")
 
 
+app.include_router(auth_router)
 app.include_router(vault_router)
 app.include_router(team_router)
 app.include_router(employee_router)

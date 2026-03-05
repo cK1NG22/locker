@@ -1,21 +1,31 @@
 import base64
 import os
+from datetime import datetime, timezone
+
+import jwt as _jwt
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-TEST_API_KEY = "test-api-key-1234"
+TEST_JWT_SECRET = "test-jwt-secret"
 TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
 
-os.environ["LOCKER_API_KEY"] = TEST_API_KEY
+os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
 os.environ["LOCKER_ENCRYPTION_KEY"] = TEST_ENC_KEY
 os.environ["LOCKER_DB_PATH"] = ":memory:"
+
+_TEST_PAYLOAD = {
+    "sub": "test-user-id",
+    "email": "test@example.com",
+    "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
+}
+TEST_JWT = _jwt.encode(_TEST_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
 
 from main import app  # noqa: E402
 from vault.db import init_db, close_db  # noqa: E402
 
-HEADERS = {"X-API-Key": TEST_API_KEY}
+HEADERS = {"Authorization": f"Bearer {TEST_JWT}"}
 
 
 @pytest_asyncio.fixture

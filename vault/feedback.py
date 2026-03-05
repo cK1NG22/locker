@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
-from src.auth import require_api_key
+from src.auth import require_user
 from vault.db import get_db
 
 
@@ -73,7 +73,7 @@ async def post_feedback(
     return result
 
 
-@router.get("/feedback", dependencies=[Depends(require_api_key)])
+@router.get("/feedback", dependencies=[Depends(require_user)])
 async def get_feedback(status: Optional[str] = Query(None)):
     db = get_db()
     if status:
@@ -103,7 +103,7 @@ async def get_feedback(status: Optional[str] = Query(None)):
     }
 
 
-@router.patch("/feedback/{feedback_id}", dependencies=[Depends(require_api_key)])
+@router.patch("/feedback/{feedback_id}", dependencies=[Depends(require_user)])
 async def update_feedback_status(feedback_id: str, body: StatusBody):
     if body.status not in ("reviewed", "applied"):
         raise HTTPException(status_code=400, detail="Status must be 'reviewed' or 'applied'")

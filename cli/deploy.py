@@ -12,9 +12,9 @@ def deploy(file_path: Path, description: Optional[str] = None, visibility: Optio
         typer.echo("Error: LOCKER_VAULT_URL environment variable is not set.")
         raise typer.Exit(code=1)
 
-    api_key = os.environ.get("LOCKER_API_KEY")
-    if not api_key:
-        typer.echo("Error: LOCKER_API_KEY environment variable is not set.")
+    jwt_token = os.environ.get("LOCKER_JWT_TOKEN")
+    if not jwt_token:
+        typer.echo("Error: LOCKER_JWT_TOKEN environment variable is not set.")
         raise typer.Exit(code=1)
 
     if not file_path.exists():
@@ -34,7 +34,7 @@ def deploy(file_path: Path, description: Optional[str] = None, visibility: Optio
         r = httpx.post(
             f"{vault_url}/api/v1/skills",
             json=payload,
-            headers={"X-API-Key": api_key},
+            headers={"Authorization": f"Bearer {jwt_token}"},
         )
     except httpx.RequestError as e:
         typer.echo(f"Error: Request failed: {e}")
@@ -58,9 +58,9 @@ def deploy_folder(folder_path: Path, description: Optional[str] = None, visibili
         typer.echo("Error: LOCKER_VAULT_URL environment variable is not set.")
         raise typer.Exit(code=1)
 
-    api_key = os.environ.get("LOCKER_API_KEY")
-    if not api_key:
-        typer.echo("Error: LOCKER_API_KEY environment variable is not set.")
+    jwt_token = os.environ.get("LOCKER_JWT_TOKEN")
+    if not jwt_token:
+        typer.echo("Error: LOCKER_JWT_TOKEN environment variable is not set.")
         raise typer.Exit(code=1)
 
     if not folder_path.exists():
@@ -92,7 +92,7 @@ def deploy_folder(folder_path: Path, description: Optional[str] = None, visibili
         r = httpx.post(
             f"{vault_url}/api/v1/skills/deploy-folder",
             json=payload,
-            headers={"X-API-Key": api_key},
+            headers={"Authorization": f"Bearer {jwt_token}"},
         )
     except httpx.RequestError as e:
         typer.echo(f"Error: Request failed: {e}")
