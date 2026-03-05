@@ -36,6 +36,7 @@ export default function SkillUpload() {
   const [folderPreview, setFolderPreview] = useState<FolderPreview | null>(null);
 
   // Shared state
+  const [scope, setScope] = useState<"team" | "personal">("team");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +80,7 @@ export default function SkillUpload() {
         name: name.trim(),
         content: content.trim(),
         description: description.trim() || undefined,
+        scope,
       });
       navigate("/skills");
     } catch (e) {
@@ -188,6 +190,7 @@ export default function SkillUpload() {
         name: folderName.trim(),
         content: folderPreview.mainContent,
         description: folderDescription.trim() || undefined,
+        scope,
         files: folderPreview.referenceFiles,
       });
       navigate("/skills");
@@ -245,6 +248,35 @@ export default function SkillUpload() {
         >
           Folder
         </button>
+      </div>
+
+      {/* Scope selector — shared between modes */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Scope</label>
+        <div className="flex gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="radio"
+              name="scope"
+              value="team"
+              checked={scope === "team"}
+              onChange={() => setScope("team")}
+              className="accent-blue-600"
+            />
+            Team <span className="text-gray-400 text-xs">(visible to all admins)</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="radio"
+              name="scope"
+              value="personal"
+              checked={scope === "personal"}
+              onChange={() => setScope("personal")}
+              className="accent-blue-600"
+            />
+            Personal <span className="text-gray-400 text-xs">(only visible to you)</span>
+          </label>
+        </div>
       </div>
 
       {/* ===== Single-file mode ===== */}

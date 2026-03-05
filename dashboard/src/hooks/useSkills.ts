@@ -19,6 +19,9 @@ export interface SkillMeta {
   created_at: string;
   updated_at: string;
   file_count: number;
+  scope: string;
+  uploaded_by: string | null;
+  uploaded_by_name: string | null;
 }
 
 export interface SkillFull extends SkillMeta {
@@ -52,7 +55,7 @@ export function useSkills() {
   }, []);
 
   const createSkill = useCallback(
-    async (body: { name: string; content: string; description?: string }) => {
+    async (body: { name: string; content: string; description?: string; scope?: string }) => {
       const result = await api.post<{ id: string }>("/api/v1/skills", body);
       await refresh();
       return result;
@@ -112,6 +115,7 @@ export function useSkills() {
       name: string;
       content: string;
       description?: string;
+      scope?: string;
       files: { path: string; content: string }[];
     }) => {
       const result = await api.post<{ id: string }>("/api/v1/skills/deploy-folder", body);

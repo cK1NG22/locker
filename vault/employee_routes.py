@@ -33,7 +33,7 @@ async def get_employee_skills(
     cursor = await db.execute(
         "SELECT s.id, s.name, s.description, s.visibility, s.content FROM skills s "
         "JOIN team_skills ts ON s.id = ts.skill_id "
-        "WHERE ts.team_id = ? AND s.visibility != 'hidden'",
+        "WHERE ts.team_id = ? AND s.visibility != 'hidden' AND s.scope = 'team'",
         (team["id"],),
     )
     rows = await cursor.fetchall()

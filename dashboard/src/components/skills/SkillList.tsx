@@ -44,6 +44,7 @@ export default function SkillList() {
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Description</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Uploaded by</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Updated</th>
                 <th className="w-20 px-4 py-3"></th>
               </tr>
@@ -52,15 +53,25 @@ export default function SkillList() {
               {skills.map((skill) => (
                 <tr key={skill.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <Link
-                      to={`/skills/${skill.id}`}
-                      className="font-mono text-blue-600 hover:underline"
-                    >
-                      {skill.name}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={`/skills/${skill.id}`}
+                        className="font-mono text-blue-600 hover:underline"
+                      >
+                        {skill.name}
+                      </Link>
+                      {skill.scope === "personal" && (
+                        <span className="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium">
+                          Personal
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-gray-500 truncate max-w-xs">
                     {skill.description || "--"}
+                  </td>
+                  <td className="px-4 py-3 text-gray-400 text-xs">
+                    {skill.uploaded_by_name || "--"}
                   </td>
                   <td className="px-4 py-3 text-gray-400">
                     {new Date(skill.updated_at).toLocaleDateString()}
