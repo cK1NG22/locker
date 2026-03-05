@@ -161,3 +161,10 @@ class SkillFolderDeploy(BaseModel):
     visibility: Visibility = "open"
     scope: Scope = "team"
     files: List[SkillFileCreate]
+
+
+class SkillCopied(BaseModel):
+    id: str
+    name: str
+    target_team_id: str
+    created_at: str

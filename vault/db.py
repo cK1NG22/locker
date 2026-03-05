@@ -5,7 +5,7 @@ from typing import Optional
 CREATE_SKILLS = """
 CREATE TABLE IF NOT EXISTS skills (
     id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
     content     TEXT NOT NULL,
     description TEXT,
     visibility  TEXT NOT NULL DEFAULT 'open',
@@ -117,6 +117,40 @@ async def init_db() -> None:
             await _db.execute(migration)
         except Exception:
             pass  # Column already exists
+    # Migration: remove UNIQUE constraint on skills.name (task 3.5)
+    # SQLite requires a table rebuild to drop a UNIQUE constraint
+    try:
+        idx_cursor = await _db.execute("PRAGMA index_list(skills)")
+        indexes = await idx_cursor.fetchall()
+        has_name_unique = False
+        for idx in indexes:
+            if idx["unique"] == 1:
+                info_cursor = await _db.execute(f"PRAGMA index_info('{idx['name']}')")
+                cols = await info_cursor.fetchall()
+                if any(col["name"] == "name" for col in cols):
+                    has_name_unique = True
+                    break
+        if has_name_unique:
+            await _db.execute("PRAGMA foreign_keys = OFF")
+            await _db.execute(
+                """CREATE TABLE IF NOT EXISTS skills_new (
+                    id          TEXT PRIMARY KEY,
+                    name        TEXT NOT NULL,
+                    content     TEXT NOT NULL,
+                    description TEXT,
+                    visibility  TEXT NOT NULL DEFAULT 'open',
+                    scope       TEXT NOT NULL DEFAULT 'team',
+                    uploaded_by TEXT,
+                    created_at  TEXT NOT NULL,
+                    updated_at  TEXT NOT NULL
+                )"""
+            )
+            await _db.execute("INSERT INTO skills_new SELECT * FROM skills")
+            await _db.execute("DROP TABLE skills")
+            await _db.execute("ALTER TABLE skills_new RENAME TO skills")
+            await _db.execute("PRAGMA foreign_keys = ON")
+    except Exception:
+        pass  # Already migrated or error
     await _db.commit()
 
 

@@ -16,6 +16,7 @@ export interface SkillMeta {
   id: string;
   name: string;
   description: string | null;
+  visibility: string;
   created_at: string;
   updated_at: string;
   file_count: number;
@@ -125,6 +126,13 @@ export function useSkills() {
     [refresh],
   );
 
+  const copyToTeam = useCallback(
+    async (skillId: string, targetTeamId: string): Promise<{ id: string; name: string; target_team_id: string; created_at: string }> => {
+      return api.post(`/api/v1/skills/${skillId}/copy-to-team/${targetTeamId}`, {});
+    },
+    [],
+  );
+
   return {
     skills,
     loading,
@@ -139,5 +147,6 @@ export function useSkills() {
     uploadSkillFile,
     deleteSkillFile,
     deployFolder,
+    copyToTeam,
   };
 }

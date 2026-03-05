@@ -132,7 +132,7 @@ Two supported use cases, both possible within the same team:
   Files: `vault/db.py`, `vault/models.py`, `vault/routes.py`, `dashboard/`
   `blocked-by: 3.1`
 
-- [ ] **3.5: Cross-team skill copy**
+- [x] **3.5: Cross-team skill copy**
   Members can share a skill into another team they belong to, creating an independent copy. Eligible skills: their own personal skills, or `open`-visibility team skills. Skills shared this way are owned by the sharer in the target team.
   Files: `vault/routes.py`, `dashboard/`
   `blocked-by: 3.3, 3.4`
