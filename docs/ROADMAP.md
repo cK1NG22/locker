@@ -117,7 +117,7 @@ Two supported use cases, both possible within the same team:
   Files: `src/auth/`, `vault/db.py`, `main.py`, `dashboard/`
   `blocked-by: none`
 
-- [ ] **3.2: Team ownership model**
+- [x] **3.2: Team ownership model**
   Add `owner_id` to teams table. New `team_members` table: (team_id, user_id, role: admin|member, can_share: bool). Team creator is auto-assigned as admin. Migrate existing teams.
   Files: `vault/db.py`, `vault/models.py`, `vault/routes.py`
   `blocked-by: 3.1`

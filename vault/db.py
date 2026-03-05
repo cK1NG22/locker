@@ -19,7 +19,20 @@ CREATE TABLE IF NOT EXISTS teams (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL UNIQUE,
     token       TEXT NOT NULL UNIQUE,
+    owner_id    TEXT,
     created_at  TEXT NOT NULL
+)
+"""
+
+CREATE_TEAM_MEMBERS = """
+CREATE TABLE IF NOT EXISTS team_members (
+    id          TEXT PRIMARY KEY,
+    team_id     TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id     TEXT NOT NULL,
+    role        TEXT NOT NULL DEFAULT 'member',
+    can_share   INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL,
+    UNIQUE(team_id, user_id)
 )
 """
 
@@ -85,6 +98,7 @@ async def init_db() -> None:
     await _db.execute("PRAGMA foreign_keys = ON")
     await _db.execute(CREATE_SKILLS)
     await _db.execute(CREATE_TEAMS)
+    await _db.execute(CREATE_TEAM_MEMBERS)
     await _db.execute(CREATE_TEAM_SKILLS)
     await _db.execute(CREATE_SKILL_FILES)
     await _db.execute(CREATE_SKILL_USAGE)
@@ -95,6 +109,11 @@ async def init_db() -> None:
         await _db.execute(
             "ALTER TABLE skills ADD COLUMN visibility TEXT NOT NULL DEFAULT 'hidden'"
         )
+    except Exception:
+        pass  # Column already exists
+    # Migrate existing DBs that lack the owner_id column
+    try:
+        await _db.execute("ALTER TABLE teams ADD COLUMN owner_id TEXT")
     except Exception:
         pass  # Column already exists
     await _db.commit()
