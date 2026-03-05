@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useTeams, type TeamDetail as TeamDetailType } from "../../hooks/useTeams";
+import { useTeams, type TeamDetail as TeamDetailType, type TeamMember } from "../../hooks/useTeams";
 import { useSkills, type SkillMeta } from "../../hooks/useSkills";
 
 export default function TeamDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getTeam, updateTeam, deleteTeam, setTeamSkills } = useTeams();
+  const { getTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember } = useTeams();
   const { skills: allSkills } = useSkills();
 
   const [team, setTeam] = useState<TeamDetailType | null>(null);
@@ -23,6 +23,11 @@ export default function TeamDetail() {
   // Skill assignment — track by skill IDs
   const [assignedSkillIds, setAssignedSkillIds] = useState<Set<string>>(new Set());
   const [savingSkills, setSavingSkills] = useState(false);
+
+  // Add member
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [addingMember, setAddingMember] = useState(false);
+  const [memberError, setMemberError] = useState<string | null>(null);
 
   const loadTeam = useCallback(async () => {
     if (!id) return;
@@ -106,6 +111,31 @@ export default function TeamDetail() {
       navigate("/teams");
     } catch (e) {
       alert(e instanceof Error ? e.message : "Delete failed");
+    }
+  };
+
+  const handleAddMember = async () => {
+    if (!id || !newMemberEmail.trim()) return;
+    setAddingMember(true);
+    setMemberError(null);
+    try {
+      await addMember(id, newMemberEmail.trim());
+      setNewMemberEmail("");
+      await loadTeam();
+    } catch (e) {
+      setMemberError(e instanceof Error ? e.message : "Failed to add member");
+    } finally {
+      setAddingMember(false);
+    }
+  };
+
+  const handleUpdateMember = async (memberId: string, updates: { role?: string; can_share?: boolean }) => {
+    if (!id) return;
+    try {
+      await updateMember(id, memberId, updates);
+      await loadTeam();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Update failed");
     }
   };
 
@@ -231,6 +261,77 @@ export default function TeamDetail() {
             </button>
           </div>
         )}
+      </div>
+
+      {/* Members */}
+      <div className="mb-6">
+        <label className="text-xs text-gray-400 uppercase tracking-wide">Members</label>
+
+        {/* Add member form */}
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="email"
+            placeholder="Email address"
+            value={newMemberEmail}
+            onChange={(e) => setNewMemberEmail(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleAddMember(); }}
+            className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={handleAddMember}
+            disabled={addingMember || !newMemberEmail.trim()}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {addingMember ? "Adding..." : "Add"}
+          </button>
+        </div>
+        {memberError && (
+          <p className="text-xs text-red-600 mt-1">{memberError}</p>
+        )}
+
+        {/* Member list */}
+        <div className="mt-3 space-y-1">
+          {(!team.members || team.members.length === 0) ? (
+            <p className="text-sm text-gray-500">No members yet.</p>
+          ) : (
+            team.members.map((member: TeamMember) => (
+              <div
+                key={member.id}
+                className="flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-50"
+              >
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm text-gray-700 truncate block">
+                    {member.email || member.user_id}
+                  </span>
+                  {member.name && (
+                    <span className="text-xs text-gray-400">{member.name}</span>
+                  )}
+                </div>
+
+                {/* Role select */}
+                <select
+                  value={member.role}
+                  onChange={(e) => handleUpdateMember(member.id, { role: e.target.value })}
+                  className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+
+                {/* Can share toggle */}
+                <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={member.can_share}
+                    onChange={(e) => handleUpdateMember(member.id, { can_share: e.target.checked })}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Share
+                </label>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {/* Metadata + delete */}

@@ -122,7 +122,7 @@ Two supported use cases, both possible within the same team:
   Files: `vault/db.py`, `vault/models.py`, `vault/routes.py`
   `blocked-by: 3.1`
 
-- [ ] **3.3: Per-member skill permissions**
+- [x] **3.3: Per-member skill permissions**
   `can_share` toggle on team membership controls whether a member can upload skills to the team. Team admin can flip this per member from the dashboard. Members without `can_share` remain read-only.
   Files: `vault/routes.py`, `dashboard/src/components/teams/`
   `blocked-by: 3.2`

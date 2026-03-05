@@ -84,9 +84,20 @@ class TeamUpdate(BaseModel):
 class TeamMemberOut(BaseModel):
     id: str
     user_id: str
+    email: Optional[str] = None
+    name: Optional[str] = None
     role: str
     can_share: bool
     created_at: str
+
+
+class TeamMemberUpdate(BaseModel):
+    role: Optional[str] = None
+    can_share: Optional[bool] = None
+
+
+class TeamMemberAdd(BaseModel):
+    email: str
 
 
 class TeamOut(BaseModel):
