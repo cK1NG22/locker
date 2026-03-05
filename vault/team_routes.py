@@ -286,6 +286,35 @@ async def update_member(
     )
 
 
+@router.delete("/teams/{team_id}/members/{member_id}", status_code=204)
+async def remove_member(team_id: str, member_id: str, user: dict = Depends(require_user)):
+    await _require_team_admin(team_id, user["sub"])
+    db = get_db()
+    cursor = await db.execute(
+        "SELECT tm.user_id, tm.role FROM team_members tm WHERE tm.id = ? AND tm.team_id = ?",
+        (member_id, team_id),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    # Prevent removing the team owner
+    owner_cursor = await db.execute("SELECT owner_id FROM teams WHERE id = ?", (team_id,))
+    owner_row = await owner_cursor.fetchone()
+    if owner_row and row["user_id"] == owner_row["owner_id"]:
+        raise HTTPException(status_code=400, detail="Cannot remove the team owner")
+    # Prevent removing the last admin
+    if row["role"] == "admin":
+        admin_count = await db.execute(
+            "SELECT COUNT(*) AS cnt FROM team_members WHERE team_id = ? AND role = 'admin'",
+            (team_id,),
+        )
+        count_row = await admin_count.fetchone()
+        if count_row["cnt"] <= 1:
+            raise HTTPException(status_code=400, detail="Cannot remove the last team admin")
+    await db.execute("DELETE FROM team_members WHERE id = ? AND team_id = ?", (member_id, team_id))
+    await db.commit()
+
+
 @router.post("/skills/{skill_id}/copy-to-team/{target_team_id}", status_code=201, response_model=SkillCopied)
 async def copy_skill_to_team(skill_id: str, target_team_id: str, user: dict = Depends(require_user)):
     user_id = user["sub"]

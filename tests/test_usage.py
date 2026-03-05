@@ -10,7 +10,7 @@ from httpx import AsyncClient, ASGITransport
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 # Generate test keys before app is imported
-TEST_JWT_SECRET = "test-jwt-secret"
+TEST_JWT_SECRET = "test-jwt-secret-that-is-long-enough-for-hs256"
 TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
 
 os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET

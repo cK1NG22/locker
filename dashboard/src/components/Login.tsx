@@ -1,10 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const { loginWithGoogle } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  useEffect(() => {
+    if (localStorage.getItem("locker_session_expired") === "1") {
+      setSessionExpired(true);
+      localStorage.removeItem("locker_session_expired");
+    }
+  }, []);
 
   const handleSuccess = async (credentialResponse: { credential?: string }) => {
     if (!credentialResponse.credential) {
@@ -31,6 +39,12 @@ export default function Login() {
           <p className="text-sm text-gray-500 mb-5">
             Sign in with your Google account to continue.
           </p>
+
+          {sessionExpired && (
+            <p className="text-sm text-amber-600 mb-4 text-center">
+              Session expired, please sign in again.
+            </p>
+          )}
 
           <div className="flex justify-center">
             <GoogleLogin

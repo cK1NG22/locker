@@ -7,7 +7,7 @@ const navItems = [
 ];
 
 export default function Sidebar() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   return (
     <aside className="w-56 bg-white border-r border-gray-200 flex flex-col min-h-screen">
@@ -35,6 +35,12 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-3 py-4 border-t border-gray-200">
+        {user && (
+          <div className="px-3 mb-2">
+            <p className="text-sm text-gray-700 truncate">{user.name}</p>
+            <p className="text-xs text-gray-400 truncate">{user.email}</p>
+          </div>
+        )}
         <button
           onClick={logout}
           className="w-full px-3 py-2 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md text-left transition-colors"

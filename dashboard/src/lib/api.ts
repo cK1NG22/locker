@@ -33,6 +33,7 @@ async function request<T>(
 
   if (res.status === 401) {
     clearStoredToken();
+    localStorage.setItem("locker_session_expired", "1");
     throw new Error("Unauthorized");
   }
 

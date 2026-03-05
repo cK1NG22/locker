@@ -6,7 +6,7 @@ import { useSkills, type SkillMeta } from "../../hooks/useSkills";
 export default function TeamDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember } = useTeams();
+  const { getTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember, removeMember } = useTeams();
   const { skills: allSkills } = useSkills();
 
   const [team, setTeam] = useState<TeamDetailType | null>(null);
@@ -129,6 +129,16 @@ export default function TeamDetail() {
     }
   };
 
+  const handleRemoveMember = async (member: TeamMember) => {
+    if (!id || !confirm(`Remove ${member.email || member.user_id} from this team?`)) return;
+    try {
+      await removeMember(id, member.id);
+      await loadTeam();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Remove failed");
+    }
+  };
+
   const handleUpdateMember = async (memberId: string, updates: { role?: string; can_share?: boolean }) => {
     if (!id) return;
     try {
@@ -205,9 +215,9 @@ export default function TeamDetail() {
 
       {/* Invite Member */}
       <div className="mb-6">
-        <label className="text-xs text-gray-400 uppercase tracking-wide">Invite Member</label>
+        <label className="text-xs text-gray-400 uppercase tracking-wide">Companion Page Link</label>
         <p className="text-xs text-gray-500 mt-1 mb-2">
-          Share this link with team members. It opens the Companion page with the token pre-filled.
+          Share this link with employees. It opens the Companion page with the team token pre-filled.
         </p>
         <div className="mt-1 flex items-center gap-2">
           <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono text-gray-700 select-all truncate">
@@ -328,6 +338,14 @@ export default function TeamDetail() {
                   />
                   Share
                 </label>
+
+                {/* Remove button */}
+                <button
+                  onClick={() => handleRemoveMember(member)}
+                  className="text-xs text-red-500 hover:text-red-700 transition-colors"
+                >
+                  Remove
+                </button>
               </div>
             ))
           )}

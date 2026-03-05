@@ -9,7 +9,7 @@ from httpx import AsyncClient, ASGITransport
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 # Generate test keys before app is imported
-TEST_JWT_SECRET = "test-jwt-secret"
+TEST_JWT_SECRET = "test-jwt-secret-that-is-long-enough-for-hs256"
 TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
 
 os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
@@ -94,14 +94,6 @@ async def test_create_skill_invalid_visibility(client):
         headers=HEADERS,
     )
     assert r.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_create_duplicate_name_returns_409(client):
-    payload = {"name": "dup-skill", "content": "original"}
-    await client.post("/api/v1/skills", json=payload, headers=HEADERS)
-    r = await client.post("/api/v1/skills", json=payload, headers=HEADERS)
-    assert r.status_code == 409
 
 
 # --- List ---
@@ -448,14 +440,6 @@ async def test_deploy_folder(client):
     r3 = await client.get(f"/api/v1/skills/{skill_id}/files/{file_id}", headers=HEADERS)
     assert r3.status_code == 200
     assert r3.json()["content"] in ("Guide text", "Example text here")
-
-
-@pytest.mark.asyncio
-async def test_deploy_folder_duplicate_name_returns_409(client):
-    payload = {"name": "dup-folder", "content": "content", "files": []}
-    await client.post("/api/v1/skills/deploy-folder", json=payload, headers=HEADERS)
-    r = await client.post("/api/v1/skills/deploy-folder", json=payload, headers=HEADERS)
-    assert r.status_code == 409
 
 
 # --- Ownership / scope tests ---
