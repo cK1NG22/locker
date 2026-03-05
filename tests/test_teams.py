@@ -8,7 +8,7 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-TEST_JWT_SECRET = "test-jwt-secret"
+TEST_JWT_SECRET = "test-jwt-secret-that-is-long-enough-for-hs256"
 TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
 
 os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
@@ -542,6 +542,92 @@ async def test_get_team_members_include_email_name(client):
     members = detail.json()["members"]
     assert members[0]["email"] == "test@example.com"
     assert members[0]["name"] == "Test User"
+
+
+# --- Remove member ---
+
+
+@pytest.mark.asyncio
+async def test_remove_member(client):
+    team = await _create_team(client, "Remove Member Team")
+    member = await _add_member_to_team(client, team["id"])
+    r = await client.delete(
+        f"/api/v1/teams/{team['id']}/members/{member['id']}",
+        headers=HEADERS,
+    )
+    assert r.status_code == 204
+    # Verify member is gone
+    detail = await client.get(f"/api/v1/teams/{team['id']}", headers=HEADERS)
+    member_ids = [m["id"] for m in detail.json()["members"]]
+    assert member["id"] not in member_ids
+
+
+@pytest.mark.asyncio
+async def test_remove_missing_member_returns_404(client):
+    team = await _create_team(client, "Remove Missing Team")
+    r = await client.delete(
+        f"/api/v1/teams/{team['id']}/members/nonexistent",
+        headers=HEADERS,
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_cannot_remove_last_admin(client):
+    team = await _create_team(client, "Remove Last Admin Team")
+    # Add other user as admin
+    member = await _add_member_to_team(client, team["id"])
+    await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{member['id']}",
+        json={"role": "admin"},
+        headers=HEADERS,
+    )
+    # Demote the owner to member
+    detail = await client.get(f"/api/v1/teams/{team['id']}", headers=HEADERS)
+    owner_member = [m for m in detail.json()["members"] if m["user_id"] == "test-user-id"][0]
+    await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{owner_member['id']}",
+        json={"role": "member"},
+        headers=HEADERS,
+    )
+    # Now other-user is the only admin. They try to remove themselves.
+    r = await client.delete(
+        f"/api/v1/teams/{team['id']}/members/{member['id']}",
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 400
+    assert "last team admin" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_cannot_remove_team_owner(client):
+    team = await _create_team(client, "Remove Owner Team")
+    # Add another admin so the "last admin" check won't trigger
+    member = await _add_member_to_team(client, team["id"])
+    await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{member['id']}",
+        json={"role": "admin"},
+        headers=HEADERS,
+    )
+    detail = await client.get(f"/api/v1/teams/{team['id']}", headers=HEADERS)
+    owner_member = [m for m in detail.json()["members"] if m["user_id"] == "test-user-id"][0]
+    r = await client.delete(
+        f"/api/v1/teams/{team['id']}/members/{owner_member['id']}",
+        headers=HEADERS,
+    )
+    assert r.status_code == 400
+    assert "team owner" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_remove_member(client):
+    team = await _create_team(client, "No Remove Team")
+    member = await _add_member_to_team(client, team["id"])
+    r = await client.delete(
+        f"/api/v1/teams/{team['id']}/members/{member['id']}",
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 403
 
 
 @pytest.mark.asyncio

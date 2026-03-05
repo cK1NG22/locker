@@ -9,7 +9,7 @@ import pytest_asyncio
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from httpx import AsyncClient, ASGITransport
 
-TEST_JWT_SECRET = "test-jwt-secret"
+TEST_JWT_SECRET = "test-jwt-secret-that-is-long-enough-for-hs256"
 TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
 
 os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
@@ -63,7 +63,7 @@ async def test_invalid_token_returns_401(client):
 
 @pytest.mark.asyncio
 async def test_wrong_secret_returns_401(client):
-    token = _make_jwt(secret="wrong-secret")
+    token = _make_jwt(secret="wrong-jwt-secret-that-is-long-enough-for-hs256")
     r = await client.get("/api/v1/skills", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 401
 

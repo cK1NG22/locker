@@ -27,10 +27,10 @@ export default function SkillDetail() {
     getSkillFile,
     uploadSkillFile,
     deleteSkillFile,
+    copyToTeam,
   } = useSkills();
   const { user } = useAuth();
   const { teams } = useTeams();
-  const { copyToTeam } = useSkills();
 
   const [skill, setSkill] = useState<SkillFull | null>(null);
   const [loading, setLoading] = useState(true);

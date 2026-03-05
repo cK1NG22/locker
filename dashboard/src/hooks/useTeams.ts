@@ -98,5 +98,12 @@ export function useTeams() {
     [],
   );
 
-  return { teams, loading, error, refresh, getTeam, createTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember };
+  const removeMember = useCallback(
+    async (teamId: string, memberId: string) => {
+      await api.delete(`/api/v1/teams/${teamId}/members/${memberId}`);
+    },
+    [],
+  );
+
+  return { teams, loading, error, refresh, getTeam, createTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember, removeMember };
 }
