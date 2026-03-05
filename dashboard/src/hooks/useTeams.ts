@@ -7,12 +7,24 @@ export interface TeamSummary {
   skill_count: number;
 }
 
+export interface TeamMember {
+  id: string;
+  user_id: string;
+  email: string | null;
+  name: string | null;
+  role: string;
+  can_share: boolean;
+  created_at: string;
+}
+
 export interface TeamDetail {
   id: string;
   name: string;
   token: string;
+  owner_id: string | null;
   created_at: string;
   skills: string[];
+  members: TeamMember[];
 }
 
 export function useTeams() {
@@ -72,5 +84,19 @@ export function useTeams() {
     [],
   );
 
-  return { teams, loading, error, refresh, getTeam, createTeam, updateTeam, deleteTeam, setTeamSkills };
+  const updateMember = useCallback(
+    async (teamId: string, memberId: string, updates: { role?: string; can_share?: boolean }) => {
+      await api.patch(`/api/v1/teams/${teamId}/members/${memberId}`, updates);
+    },
+    [],
+  );
+
+  const addMember = useCallback(
+    async (teamId: string, email: string) => {
+      return api.post<TeamMember>(`/api/v1/teams/${teamId}/members`, { email });
+    },
+    [],
+  );
+
+  return { teams, loading, error, refresh, getTeam, createTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember };
 }

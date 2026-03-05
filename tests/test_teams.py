@@ -321,3 +321,236 @@ async def test_non_admin_cannot_set_team_skills(client):
         headers=OTHER_HEADERS,
     )
     assert r.status_code == 403
+
+
+# --- can_share permissions ---
+
+
+async def _add_other_user_to_db(client):
+    """Insert the 'other' test user into the users table so add_member can find them."""
+    from vault.db import get_db
+    db = get_db()
+    await db.execute(
+        "INSERT OR IGNORE INTO users (id, email, name, google_id, created_at) VALUES (?, ?, ?, ?, ?)",
+        ("other-user-id", "other@example.com", "Other User", "google-other", "2026-01-01T00:00:00"),
+    )
+    await db.execute(
+        "INSERT OR IGNORE INTO users (id, email, name, google_id, created_at) VALUES (?, ?, ?, ?, ?)",
+        ("test-user-id", "test@example.com", "Test User", "google-test", "2026-01-01T00:00:00"),
+    )
+    await db.commit()
+
+
+async def _add_member_to_team(client, team_id, can_share=False):
+    """Add 'other' user to a team via the API and return the member."""
+    await _add_other_user_to_db(client)
+    r = await client.post(
+        f"/api/v1/teams/{team_id}/members",
+        json={"email": "other@example.com"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    member = r.json()
+    if can_share:
+        await client.patch(
+            f"/api/v1/teams/{team_id}/members/{member['id']}",
+            json={"can_share": True},
+            headers=HEADERS,
+        )
+    return member
+
+
+@pytest.mark.asyncio
+async def test_member_with_can_share_can_assign_skills(client):
+    team = await _create_team(client, "Share Team")
+    skill = await _create_skill(client, "share-skill")
+    await _add_member_to_team(client, team["id"], can_share=True)
+    r = await client.put(
+        f"/api/v1/teams/{team['id']}/skills",
+        json={"skill_ids": [skill["id"]]},
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_member_without_can_share_cannot_assign_skills(client):
+    team = await _create_team(client, "No Share Team")
+    skill = await _create_skill(client, "noshare-skill")
+    await _add_member_to_team(client, team["id"], can_share=False)
+    r = await client.put(
+        f"/api/v1/teams/{team['id']}/skills",
+        json={"skill_ids": [skill["id"]]},
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_admin_can_assign_skills_regardless_of_can_share(client):
+    team = await _create_team(client, "Admin Share Team")
+    skill = await _create_skill(client, "admin-share-skill")
+    r = await client.put(
+        f"/api/v1/teams/{team['id']}/skills",
+        json={"skill_ids": [skill["id"]]},
+        headers=HEADERS,
+    )
+    assert r.status_code == 200
+
+
+# --- Add member ---
+
+
+@pytest.mark.asyncio
+async def test_add_member_by_email(client):
+    team = await _create_team(client, "Add Member Team")
+    await _add_other_user_to_db(client)
+    r = await client.post(
+        f"/api/v1/teams/{team['id']}/members",
+        json={"email": "other@example.com"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    data = r.json()
+    assert data["user_id"] == "other-user-id"
+    assert data["email"] == "other@example.com"
+    assert data["name"] == "Other User"
+    assert data["role"] == "member"
+    assert data["can_share"] is False
+
+
+@pytest.mark.asyncio
+async def test_add_member_unknown_email_returns_404(client):
+    team = await _create_team(client, "Unknown Email Team")
+    r = await client.post(
+        f"/api/v1/teams/{team['id']}/members",
+        json={"email": "nobody@example.com"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_add_duplicate_member_returns_409(client):
+    team = await _create_team(client, "Dup Member Team")
+    await _add_other_user_to_db(client)
+    await client.post(
+        f"/api/v1/teams/{team['id']}/members",
+        json={"email": "other@example.com"},
+        headers=HEADERS,
+    )
+    r = await client.post(
+        f"/api/v1/teams/{team['id']}/members",
+        json={"email": "other@example.com"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_add_member(client):
+    team = await _create_team(client, "No Add Team")
+    await _add_other_user_to_db(client)
+    r = await client.post(
+        f"/api/v1/teams/{team['id']}/members",
+        json={"email": "other@example.com"},
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 403
+
+
+# --- Update member ---
+
+
+@pytest.mark.asyncio
+async def test_toggle_can_share(client):
+    team = await _create_team(client, "Toggle Team")
+    member = await _add_member_to_team(client, team["id"])
+    r = await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{member['id']}",
+        json={"can_share": True},
+        headers=HEADERS,
+    )
+    assert r.status_code == 200
+    assert r.json()["can_share"] is True
+
+
+@pytest.mark.asyncio
+async def test_change_member_role(client):
+    team = await _create_team(client, "Role Team")
+    member = await _add_member_to_team(client, team["id"])
+    r = await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{member['id']}",
+        json={"role": "admin"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 200
+    assert r.json()["role"] == "admin"
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_update_member(client):
+    team = await _create_team(client, "No Update Team")
+    member = await _add_member_to_team(client, team["id"])
+    r = await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{member['id']}",
+        json={"can_share": True},
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_cannot_demote_last_admin(client):
+    team = await _create_team(client, "Last Admin Team")
+    detail = await client.get(f"/api/v1/teams/{team['id']}", headers=HEADERS)
+    admin_member = detail.json()["members"][0]
+    r = await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{admin_member['id']}",
+        json={"role": "member"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 400
+    assert "last team admin" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_can_demote_admin_if_another_exists(client):
+    team = await _create_team(client, "Multi Admin Team")
+    member = await _add_member_to_team(client, team["id"])
+    await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{member['id']}",
+        json={"role": "admin"},
+        headers=HEADERS,
+    )
+    detail = await client.get(f"/api/v1/teams/{team['id']}", headers=HEADERS)
+    original_admin = [m for m in detail.json()["members"] if m["user_id"] == "test-user-id"][0]
+    r = await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{original_admin['id']}",
+        json={"role": "member"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 200
+    assert r.json()["role"] == "member"
+
+
+@pytest.mark.asyncio
+async def test_get_team_members_include_email_name(client):
+    team = await _create_team(client, "Email Team")
+    await _add_other_user_to_db(client)
+    detail = await client.get(f"/api/v1/teams/{team['id']}", headers=HEADERS)
+    members = detail.json()["members"]
+    assert members[0]["email"] == "test@example.com"
+    assert members[0]["name"] == "Test User"
+
+
+@pytest.mark.asyncio
+async def test_update_member_requires_at_least_one_field(client):
+    team = await _create_team(client, "No Field Team")
+    member = await _add_member_to_team(client, team["id"])
+    r = await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{member['id']}",
+        json={},
+        headers=HEADERS,
+    )
+    assert r.status_code == 422
