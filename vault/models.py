@@ -1,7 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Literal, Optional, List
 
 Visibility = Literal["hidden", "shared", "open"]
+Scope = Literal["personal", "team"]
 
 
 class SkillCreate(BaseModel):
@@ -9,6 +10,7 @@ class SkillCreate(BaseModel):
     content: str
     description: Optional[str] = None
     visibility: Visibility = "open"
+    scope: Scope = "team"
 
 
 class SkillUpdate(BaseModel):
@@ -16,6 +18,7 @@ class SkillUpdate(BaseModel):
     content: Optional[str] = None
     description: Optional[str] = None
     visibility: Optional[Visibility] = None
+    scope: Optional[Scope] = None
 
 
 class SkillMeta(BaseModel):
@@ -23,6 +26,9 @@ class SkillMeta(BaseModel):
     name: str
     description: Optional[str] = None
     visibility: str
+    scope: str = "team"
+    uploaded_by: Optional[str] = None
+    uploaded_by_name: Optional[str] = None
     file_count: int = 0
     created_at: str
     updated_at: str
@@ -34,6 +40,9 @@ class SkillFull(BaseModel):
     content: str
     description: Optional[str] = None
     visibility: str
+    scope: str = "team"
+    uploaded_by: Optional[str] = None
+    uploaded_by_name: Optional[str] = None
     files: List["SkillFileMeta"] = []
     created_at: str
     updated_at: str
@@ -43,6 +52,7 @@ class SkillCreated(BaseModel):
     id: str
     name: str
     visibility: str
+    scope: str
     created_at: str
 
 
@@ -50,6 +60,7 @@ class SkillUpdated(BaseModel):
     id: str
     name: str
     visibility: str
+    scope: str
     updated_at: str
 
 
@@ -137,4 +148,5 @@ class SkillFolderDeploy(BaseModel):
     content: str
     description: Optional[str] = None
     visibility: Visibility = "open"
+    scope: Scope = "team"
     files: List[SkillFileCreate]

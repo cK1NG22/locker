@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS skills (
     content     TEXT NOT NULL,
     description TEXT,
     visibility  TEXT NOT NULL DEFAULT 'open',
+    scope       TEXT NOT NULL DEFAULT 'team',
+    uploaded_by TEXT,
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 )
@@ -104,18 +106,17 @@ async def init_db() -> None:
     await _db.execute(CREATE_SKILL_USAGE)
     await _db.execute(CREATE_SKILL_FEEDBACK)
     await _db.execute(CREATE_USERS)
-    # Migrate existing DBs that lack the visibility column
-    try:
-        await _db.execute(
-            "ALTER TABLE skills ADD COLUMN visibility TEXT NOT NULL DEFAULT 'hidden'"
-        )
-    except Exception:
-        pass  # Column already exists
-    # Migrate existing DBs that lack the owner_id column
-    try:
-        await _db.execute("ALTER TABLE teams ADD COLUMN owner_id TEXT")
-    except Exception:
-        pass  # Column already exists
+    # Migrate existing DBs that lack newer columns
+    for migration in [
+        "ALTER TABLE skills ADD COLUMN visibility TEXT NOT NULL DEFAULT 'hidden'",
+        "ALTER TABLE skills ADD COLUMN scope TEXT NOT NULL DEFAULT 'team'",
+        "ALTER TABLE skills ADD COLUMN uploaded_by TEXT",
+        "ALTER TABLE teams ADD COLUMN owner_id TEXT",
+    ]:
+        try:
+            await _db.execute(migration)
+        except Exception:
+            pass  # Column already exists
     await _db.commit()
 
 

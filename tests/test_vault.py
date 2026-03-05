@@ -456,3 +456,164 @@ async def test_deploy_folder_duplicate_name_returns_409(client):
     await client.post("/api/v1/skills/deploy-folder", json=payload, headers=HEADERS)
     r = await client.post("/api/v1/skills/deploy-folder", json=payload, headers=HEADERS)
     assert r.status_code == 409
+
+
+# --- Ownership / scope tests ---
+
+_OTHER_PAYLOAD = {
+    "sub": "other-user-id",
+    "email": "other@example.com",
+    "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
+}
+OTHER_JWT = _jwt.encode(_OTHER_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
+OTHER_HEADERS = {"Authorization": f"Bearer {OTHER_JWT}"}
+
+
+@pytest.mark.asyncio
+async def test_create_skill_captures_uploaded_by(client):
+    r = await client.post(
+        "/api/v1/skills",
+        json={"name": "owned-skill", "content": "something"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    skill_id = r.json()["id"]
+    r2 = await client.get(f"/api/v1/skills/{skill_id}", headers=HEADERS)
+    assert r2.status_code == 200
+    assert r2.json()["uploaded_by"] == "test-user-id"
+
+
+@pytest.mark.asyncio
+async def test_personal_skill_only_visible_to_owner(client):
+    r = await client.post(
+        "/api/v1/skills",
+        json={"name": "personal-skill", "content": "private", "scope": "personal"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    skill_id = r.json()["id"]
+
+    # User B cannot see it
+    r_other_get = await client.get(f"/api/v1/skills/{skill_id}", headers=OTHER_HEADERS)
+    assert r_other_get.status_code == 404
+
+    r_other_list = await client.get("/api/v1/skills", headers=OTHER_HEADERS)
+    other_ids = [s["id"] for s in r_other_list.json()["skills"]]
+    assert skill_id not in other_ids
+
+    # User A can see it
+    r_owner_get = await client.get(f"/api/v1/skills/{skill_id}", headers=HEADERS)
+    assert r_owner_get.status_code == 200
+
+    r_owner_list = await client.get("/api/v1/skills", headers=HEADERS)
+    owner_ids = [s["id"] for s in r_owner_list.json()["skills"]]
+    assert skill_id in owner_ids
+
+
+@pytest.mark.asyncio
+async def test_personal_skill_not_in_employee_results(client):
+    # Create a team
+    db_r = await client.post("/api/v1/teams", json={"name": "emp-team"}, headers=HEADERS)
+    assert db_r.status_code == 201
+    team_id = db_r.json()["id"]
+    team_token = db_r.json()["token"]
+
+    # Create a personal skill
+    ps_r = await client.post(
+        "/api/v1/skills",
+        json={"name": "personal-emp-skill", "content": "private", "scope": "personal"},
+        headers=HEADERS,
+    )
+    assert ps_r.status_code == 201
+    personal_skill_id = ps_r.json()["id"]
+
+    # Assign it to the team
+    await client.put(
+        f"/api/v1/teams/{team_id}/skills",
+        json={"skill_ids": [personal_skill_id]},
+        headers=HEADERS,
+    )
+
+    # Employee endpoint should not return it (scope = personal)
+    emp_r = await client.get(
+        "/api/v1/employee/skills",
+        headers={"X-Team-Token": team_token},
+    )
+    assert emp_r.status_code == 200
+    emp_ids = [s["id"] for s in emp_r.json()["skills"]]
+    assert personal_skill_id not in emp_ids
+
+
+@pytest.mark.asyncio
+async def test_team_to_personal_scope_change_blocked(client):
+    r = await client.post(
+        "/api/v1/skills",
+        json={"name": "team-skill-noscope", "content": "content", "scope": "team"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    skill_id = r.json()["id"]
+    r2 = await client.put(
+        f"/api/v1/skills/{skill_id}",
+        json={"scope": "personal"},
+        headers=HEADERS,
+    )
+    assert r2.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_personal_to_team_scope_change_allowed(client):
+    r = await client.post(
+        "/api/v1/skills",
+        json={"name": "personal-to-team-skill", "content": "content", "scope": "personal"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    skill_id = r.json()["id"]
+    r2 = await client.put(
+        f"/api/v1/skills/{skill_id}",
+        json={"scope": "team"},
+        headers=HEADERS,
+    )
+    assert r2.status_code == 200
+    assert r2.json()["scope"] == "team"
+
+
+@pytest.mark.asyncio
+async def test_non_owner_cannot_delete_personal_skill(client):
+    r = await client.post(
+        "/api/v1/skills",
+        json={"name": "personal-del-skill", "content": "mine", "scope": "personal"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    skill_id = r.json()["id"]
+    r2 = await client.delete(f"/api/v1/skills/{skill_id}", headers=OTHER_HEADERS)
+    assert r2.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_bundle_excludes_personal_skills(client):
+    # Create a personal skill
+    r_personal = await client.post(
+        "/api/v1/skills",
+        json={"name": "bundle-personal-skill", "content": "private content", "scope": "personal"},
+        headers=HEADERS,
+    )
+    assert r_personal.status_code == 201
+    personal_id = r_personal.json()["id"]
+
+    # Create a team skill
+    r_team = await client.post(
+        "/api/v1/skills",
+        json={"name": "bundle-team-skill", "content": "team content", "scope": "team"},
+        headers=HEADERS,
+    )
+    assert r_team.status_code == 201
+    team_id = r_team.json()["id"]
+
+    r_bundle = await client.get("/api/v1/skills/bundle", headers=HEADERS)
+    assert r_bundle.status_code == 200
+    bundle_ids = [s["id"] for s in r_bundle.json()["skills"]]
+    assert team_id in bundle_ids
+    assert personal_id not in bundle_ids
