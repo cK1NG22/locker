@@ -112,7 +112,7 @@ Two supported use cases, both possible within the same team:
 - **Use case A (locked IP):** Team admin uploads skills, members consume them invisibly
 - **Use case B (open sharing):** Members with `can_share` permission upload and share skills freely
 
-- [ ] **3.1: User accounts + Google OAuth**
+- [x] **3.1: User accounts + Google OAuth**
   `users` table (id, email, name, google_id, created_at). Google OAuth login/signup flow. Session or JWT management. Replaces the current single global API key with real user identity.
   Files: `src/auth/`, `vault/db.py`, `main.py`, `dashboard/`
   `blocked-by: none`
