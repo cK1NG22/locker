@@ -6,6 +6,8 @@ import {
   type SkillFileMeta,
   type SkillFileFull,
 } from "../../hooks/useSkills";
+import { useAuth } from "../../context/AuthContext";
+import { useTeams, type TeamSummary } from "../../hooks/useTeams";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -26,6 +28,9 @@ export default function SkillDetail() {
     uploadSkillFile,
     deleteSkillFile,
   } = useSkills();
+  const { user } = useAuth();
+  const { teams } = useTeams();
+  const { copyToTeam } = useSkills();
 
   const [skill, setSkill] = useState<SkillFull | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,6 +51,13 @@ export default function SkillDetail() {
   const [newFilePath, setNewFilePath] = useState("");
   const [newFileContent, setNewFileContent] = useState("");
   const [addingFile, setAddingFile] = useState(false);
+
+  // Share to team state
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareTeamId, setShareTeamId] = useState("");
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareSuccess, setShareSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -202,11 +214,30 @@ export default function SkillDetail() {
     reader.readAsText(file);
   };
 
+  const handleShare = async () => {
+    if (!id || !shareTeamId) return;
+    setSharing(true);
+    setShareError(null);
+    setShareSuccess(null);
+    try {
+      const result = await copyToTeam(id, shareTeamId);
+      setShareSuccess(`Copied as new skill (ID: ${result.id})`);
+      setShareTeamId("");
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : "Copy failed");
+    } finally {
+      setSharing(false);
+    }
+  };
+
   if (loading) return <p className="text-sm text-gray-500">Loading...</p>;
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!skill) return null;
 
   const files = skill.files ?? [];
+  const isOwnPersonal = skill.scope === "personal" && skill.uploaded_by === user?.id;
+  const isOpenTeam = skill.scope === "team" && skill.visibility === "open";
+  const canShare = isOwnPersonal || isOpenTeam;
 
   return (
     <div className="max-w-3xl">
@@ -404,6 +435,54 @@ export default function SkillDetail() {
           </div>
         )}
       </div>
+
+      {/* Share to team */}
+      {canShare && (
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => { setShowShareModal(true); setShareError(null); setShareSuccess(null); }}
+            className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+          >
+            Share to team...
+          </button>
+
+          {showShareModal && (
+            <div className="mt-3 border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-3">
+              <p className="text-sm font-medium text-gray-700">Copy this skill to another team</p>
+              <select
+                value={shareTeamId}
+                onChange={(e) => setShareTeamId(e.target.value)}
+                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select a team...</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              {shareError && <p className="text-sm text-red-600">{shareError}</p>}
+              {shareSuccess && <p className="text-sm text-green-600">{shareSuccess}</p>}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  disabled={!shareTeamId || sharing}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {sharing ? "Copying..." : "Copy to team"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowShareModal(false); setShareError(null); setShareSuccess(null); }}
+                  className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Metadata + delete */}
       <div className="flex items-center justify-between text-xs text-gray-400 pt-4 border-t border-gray-200">

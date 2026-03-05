@@ -15,6 +15,7 @@ from vault.models import (
     TeamMemberUpdate,
     TeamMemberAdd,
     TeamSkillsSet,
+    SkillCopied,
 )
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
@@ -283,3 +284,98 @@ async def update_member(
         can_share=bool(new_can_share),
         created_at=row["created_at"],
     )
+
+
+@router.post("/skills/{skill_id}/copy-to-team/{target_team_id}", status_code=201, response_model=SkillCopied)
+async def copy_skill_to_team(skill_id: str, target_team_id: str, user: dict = Depends(require_user)):
+    user_id = user["sub"]
+    db = get_db()
+
+    # 1. Get source skill
+    cursor = await db.execute(
+        "SELECT id, name, content, description, visibility, scope, uploaded_by FROM skills WHERE id = ?",
+        (skill_id,),
+    )
+    skill = await cursor.fetchone()
+    if skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    # 2. Eligibility check
+    eligible = False
+    if skill["scope"] == "personal" and skill["uploaded_by"] == user_id:
+        eligible = True
+    elif skill["scope"] == "team" and skill["visibility"] == "open":
+        # User must be a member of at least one team that has this skill
+        mc = await db.execute(
+            "SELECT 1 FROM team_skills ts JOIN team_members tm ON ts.team_id = tm.team_id "
+            "WHERE ts.skill_id = ? AND tm.user_id = ?",
+            (skill_id, user_id),
+        )
+        if await mc.fetchone() is not None:
+            eligible = True
+
+    if not eligible:
+        raise HTTPException(status_code=403, detail="Not eligible to copy this skill")
+
+    # 3. Check user is a member of the target team
+    mc = await db.execute(
+        "SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?",
+        (target_team_id, user_id),
+    )
+    if await mc.fetchone() is None:
+        raise HTTPException(status_code=403, detail="You are not a member of the target team")
+
+    # 4. Check can_share permission in target team (reuses existing helper)
+    await _require_team_share(target_team_id, user_id)
+
+    # 5. Check name uniqueness in target team
+    nc = await db.execute(
+        "SELECT 1 FROM skills s JOIN team_skills ts ON s.id = ts.skill_id "
+        "WHERE s.name = ? AND ts.team_id = ?",
+        (skill["name"], target_team_id),
+    )
+    if await nc.fetchone() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A skill named '{skill['name']}' already exists in the target team",
+        )
+
+    # 6. Copy skill record
+    now = _now()
+    new_skill_id = str(uuid.uuid4())
+    await db.execute(
+        "INSERT INTO skills (id, name, content, description, visibility, scope, uploaded_by, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            new_skill_id,
+            skill["name"],
+            skill["content"],  # Copy encrypted blob as-is — do NOT decrypt/re-encrypt
+            skill["description"],
+            skill["visibility"],
+            "team",
+            user_id,
+            now,
+            now,
+        ),
+    )
+
+    # 7. Copy all skill_files
+    files_cursor = await db.execute(
+        "SELECT path, content, size_bytes FROM skill_files WHERE skill_id = ?",
+        (skill_id,),
+    )
+    file_rows = await files_cursor.fetchall()
+    for fr in file_rows:
+        await db.execute(
+            "INSERT INTO skill_files (id, skill_id, path, content, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), new_skill_id, fr["path"], fr["content"], fr["size_bytes"], now),
+        )
+
+    # 8. Link copy to target team
+    await db.execute(
+        "INSERT INTO team_skills (team_id, skill_id) VALUES (?, ?)",
+        (target_team_id, new_skill_id),
+    )
+    await db.commit()
+
+    return SkillCopied(id=new_skill_id, name=skill["name"], target_team_id=target_team_id, created_at=now)

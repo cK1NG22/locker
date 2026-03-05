@@ -554,3 +554,220 @@ async def test_update_member_requires_at_least_one_field(client):
         headers=HEADERS,
     )
     assert r.status_code == 422
+
+
+# --- Cross-team skill copy ---
+
+
+async def _create_skill_full(client, name, scope="team", visibility="open", content="skill content"):
+    r = await client.post(
+        "/api/v1/skills",
+        json={"name": name, "content": content, "scope": scope, "visibility": visibility},
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    return r.json()
+
+
+async def _assign_skill_to_team(client, team_id, skill_id):
+    r = await client.put(
+        f"/api/v1/teams/{team_id}/skills",
+        json={"skill_ids": [skill_id]},
+        headers=HEADERS,
+    )
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_copy_own_personal_skill_to_team(client):
+    skill = await _create_skill_full(client, "my-personal-skill", scope="personal")
+    team = await _create_team(client, "Copy Target Team")
+    r = await client.post(
+        f"/api/v1/skills/{skill['id']}/copy-to-team/{team['id']}",
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    data = r.json()
+    assert data["name"] == "my-personal-skill"
+    assert data["target_team_id"] == team["id"]
+    assert "id" in data
+    assert data["id"] != skill["id"]
+
+
+@pytest.mark.asyncio
+async def test_copy_open_team_skill_to_another_team(client):
+    skill = await _create_skill_full(client, "open-team-skill", scope="team", visibility="open")
+    source_team = await _create_team(client, "Source Team")
+    target_team = await _create_team(client, "Target Team")
+    await _assign_skill_to_team(client, source_team["id"], skill["id"])
+    r = await client.post(
+        f"/api/v1/skills/{skill['id']}/copy-to-team/{target_team['id']}",
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    data = r.json()
+    assert data["name"] == "open-team-skill"
+    assert data["target_team_id"] == target_team["id"]
+
+
+@pytest.mark.asyncio
+async def test_copy_non_open_team_skill_rejected(client):
+    skill = await _create_skill_full(client, "hidden-team-skill", scope="team", visibility="hidden")
+    source_team = await _create_team(client, "Hidden Source Team")
+    target_team = await _create_team(client, "Hidden Target Team")
+    await _assign_skill_to_team(client, source_team["id"], skill["id"])
+    r = await client.post(
+        f"/api/v1/skills/{skill['id']}/copy-to-team/{target_team['id']}",
+        headers=HEADERS,
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_copy_unowned_personal_skill_rejected(client):
+    # test_user creates a personal skill; other_user tries to copy it
+    skill = await _create_skill_full(client, "others-personal-skill", scope="personal")
+    target_team = await _create_team(client, "Other Target Team")
+    await _add_other_user_to_db(client)
+    await client.post(
+        f"/api/v1/teams/{target_team['id']}/members",
+        json={"email": "other@example.com"},
+        headers=HEADERS,
+    )
+    # Grant can_share to other_user in target team
+    detail = await client.get(f"/api/v1/teams/{target_team['id']}", headers=HEADERS)
+    member = [m for m in detail.json()["members"] if m["user_id"] == "other-user-id"][0]
+    await client.patch(
+        f"/api/v1/teams/{target_team['id']}/members/{member['id']}",
+        json={"can_share": True},
+        headers=HEADERS,
+    )
+    r = await client.post(
+        f"/api/v1/skills/{skill['id']}/copy-to-team/{target_team['id']}",
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_copy_to_team_user_not_member_of_rejected(client):
+    skill = await _create_skill_full(client, "not-member-skill", scope="personal")
+    # Create team2 but do NOT add test_user (they're admin, so this won't work as a test)
+    # Instead: use other_user trying to copy to a team they're not in
+    target_team = await _create_team(client, "Members Only Team")
+    # other_user is not a member of target_team
+    r = await client.post(
+        f"/api/v1/skills/{skill['id']}/copy-to-team/{target_team['id']}",
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_copy_without_can_share_in_target_team_rejected(client):
+    # other_user has open team skill via source team; target team has no can_share
+    skill = await _create_skill_full(client, "no-share-perm-skill", scope="team", visibility="open")
+    source_team = await _create_team(client, "No Share Source Team")
+    target_team = await _create_team(client, "No Share Target Team")
+    await _assign_skill_to_team(client, source_team["id"], skill["id"])
+    await _add_other_user_to_db(client)
+    # Add other_user to source team (so they're eligible) and target team (without can_share)
+    await client.post(
+        f"/api/v1/teams/{source_team['id']}/members",
+        json={"email": "other@example.com"},
+        headers=HEADERS,
+    )
+    await client.post(
+        f"/api/v1/teams/{target_team['id']}/members",
+        json={"email": "other@example.com"},
+        headers=HEADERS,
+    )
+    r = await client.post(
+        f"/api/v1/skills/{skill['id']}/copy-to-team/{target_team['id']}",
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_copy_duplicate_name_in_target_team_rejected(client):
+    skill = await _create_skill_full(client, "dup-name-skill", scope="team", visibility="open")
+    existing = await _create_skill_full(client, "dup-name-skill-copy", scope="team", visibility="open")
+    source_team = await _create_team(client, "Dup Source Team")
+    target_team = await _create_team(client, "Dup Target Team")
+    await _assign_skill_to_team(client, source_team["id"], skill["id"])
+    # Create a skill with the SAME name in target team directly
+    same_name_skill = await _create_skill_full(client, "dup-name-skill", scope="team", visibility="open")
+    await _assign_skill_to_team(client, target_team["id"], same_name_skill["id"])
+    r = await client.post(
+        f"/api/v1/skills/{skill['id']}/copy-to-team/{target_team['id']}",
+        headers=HEADERS,
+    )
+    assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_copy_includes_all_skill_files(client):
+    skill = await _create_skill_full(client, "multifile-skill", scope="personal")
+    # Add two reference files
+    await client.post(
+        f"/api/v1/skills/{skill['id']}/files",
+        json={"path": "ref/a.md", "content": "file a content"},
+        headers=HEADERS,
+    )
+    await client.post(
+        f"/api/v1/skills/{skill['id']}/files",
+        json={"path": "ref/b.md", "content": "file b content"},
+        headers=HEADERS,
+    )
+    target_team = await _create_team(client, "Multifile Target Team")
+    r = await client.post(
+        f"/api/v1/skills/{skill['id']}/copy-to-team/{target_team['id']}",
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    new_skill_id = r.json()["id"]
+    files_r = await client.get(f"/api/v1/skills/{new_skill_id}/files", headers=HEADERS)
+    assert files_r.status_code == 200
+    files = files_r.json()["files"]
+    assert len(files) == 2
+    paths = {f["path"] for f in files}
+    assert paths == {"ref/a.md", "ref/b.md"}
+
+
+@pytest.mark.asyncio
+async def test_copy_is_independent_of_original(client):
+    skill = await _create_skill_full(client, "independence-skill", scope="personal", content="original content")
+    target_team = await _create_team(client, "Independence Target Team")
+    copy_r = await client.post(
+        f"/api/v1/skills/{skill['id']}/copy-to-team/{target_team['id']}",
+        headers=HEADERS,
+    )
+    assert copy_r.status_code == 201
+    new_id = copy_r.json()["id"]
+    # Update the original
+    await client.put(
+        f"/api/v1/skills/{skill['id']}",
+        json={"content": "updated content"},
+        headers=HEADERS,
+    )
+    # The copy should still have the original content
+    copy_detail = await client.get(f"/api/v1/skills/{new_id}", headers=HEADERS)
+    assert copy_detail.status_code == 200
+    assert copy_detail.json()["content"] == "original content"
+
+
+@pytest.mark.asyncio
+async def test_same_skill_name_allowed_in_different_teams(client):
+    # After removing global UNIQUE, same name can exist in multiple teams
+    skill1 = await _create_skill_full(client, "shared-name-skill", scope="team", visibility="open")
+    skill2 = await _create_skill_full(client, "shared-name-skill", scope="team", visibility="open")
+    team1 = await _create_team(client, "Name Team 1")
+    team2 = await _create_team(client, "Name Team 2")
+    await _assign_skill_to_team(client, team1["id"], skill1["id"])
+    await _assign_skill_to_team(client, team2["id"], skill2["id"])
+    # Both teams have a skill named "shared-name-skill" — this is valid
+    detail1 = await client.get(f"/api/v1/teams/{team1['id']}", headers=HEADERS)
+    detail2 = await client.get(f"/api/v1/teams/{team2['id']}", headers=HEADERS)
+    assert "shared-name-skill" in detail1.json()["skills"]
+    assert "shared-name-skill" in detail2.json()["skills"]

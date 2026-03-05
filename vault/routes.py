@@ -35,16 +35,19 @@ async def create_skill(body: SkillCreate, user: dict = Depends(require_user)):
     encrypted = encrypt(body.content)
     uploaded_by = user["sub"]
     db = get_db()
-    try:
-        await db.execute(
-            "INSERT INTO skills (id, name, content, description, visibility, scope, uploaded_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (skill_id, body.name, encrypted, body.description, body.visibility, body.scope, uploaded_by, now, now),
+    # Enforce per-user uniqueness for personal skills
+    if body.scope == "personal":
+        dup = await db.execute(
+            "SELECT 1 FROM skills WHERE name = ? AND scope = 'personal' AND uploaded_by = ?",
+            (body.name, uploaded_by),
         )
-        await db.commit()
-    except Exception as e:
-        if "UNIQUE constraint failed" in str(e):
-            raise HTTPException(status_code=409, detail=f"Skill '{body.name}' already exists")
-        raise
+        if await dup.fetchone() is not None:
+            raise HTTPException(status_code=409, detail=f"You already have a personal skill named '{body.name}'")
+    await db.execute(
+        "INSERT INTO skills (id, name, content, description, visibility, scope, uploaded_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (skill_id, body.name, encrypted, body.description, body.visibility, body.scope, uploaded_by, now, now),
+    )
+    await db.commit()
     return SkillCreated(id=skill_id, name=body.name, visibility=body.visibility, scope=body.scope, created_at=now)
 
 
@@ -306,15 +309,18 @@ async def deploy_folder(body: SkillFolderDeploy, user: dict = Depends(require_us
     encrypted_content = encrypt(body.content)
     uploaded_by = user["sub"]
     db = get_db()
-    try:
-        await db.execute(
-            "INSERT INTO skills (id, name, content, description, visibility, scope, uploaded_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (skill_id, body.name, encrypted_content, body.description, body.visibility, body.scope, uploaded_by, now, now),
+    # Enforce per-user uniqueness for personal skills
+    if body.scope == "personal":
+        dup = await db.execute(
+            "SELECT 1 FROM skills WHERE name = ? AND scope = 'personal' AND uploaded_by = ?",
+            (body.name, uploaded_by),
         )
-    except Exception as e:
-        if "UNIQUE constraint failed" in str(e):
-            raise HTTPException(status_code=409, detail=f"Skill '{body.name}' already exists")
-        raise
+        if await dup.fetchone() is not None:
+            raise HTTPException(status_code=409, detail=f"You already have a personal skill named '{body.name}'")
+    await db.execute(
+        "INSERT INTO skills (id, name, content, description, visibility, scope, uploaded_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (skill_id, body.name, encrypted_content, body.description, body.visibility, body.scope, uploaded_by, now, now),
+    )
     # Insert reference files
     for f in body.files:
         file_id = str(uuid.uuid4())
