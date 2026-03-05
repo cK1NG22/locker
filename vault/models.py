@@ -70,10 +70,19 @@ class TeamUpdate(BaseModel):
     name: str
 
 
+class TeamMemberOut(BaseModel):
+    id: str
+    user_id: str
+    role: str
+    can_share: bool
+    created_at: str
+
+
 class TeamOut(BaseModel):
     id: str
     name: str
     token: str
+    owner_id: Optional[str] = None
     created_at: str
 
 
@@ -87,8 +96,10 @@ class TeamDetail(BaseModel):
     id: str
     name: str
     token: str
+    owner_id: Optional[str] = None
     created_at: str
     skills: List[str]
+    members: List[TeamMemberOut] = []
 
 
 class TeamSkillsSet(BaseModel):

@@ -22,10 +22,18 @@ _TEST_PAYLOAD = {
 }
 TEST_JWT = _jwt.encode(_TEST_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
 
+_OTHER_PAYLOAD = {
+    "sub": "other-user-id",
+    "email": "other@example.com",
+    "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
+}
+OTHER_JWT = _jwt.encode(_OTHER_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
+
 from main import app  # noqa: E402
 from vault.db import init_db, close_db  # noqa: E402
 
 HEADERS = {"Authorization": f"Bearer {TEST_JWT}"}
+OTHER_HEADERS = {"Authorization": f"Bearer {OTHER_JWT}"}
 
 
 @pytest_asyncio.fixture
@@ -250,3 +258,66 @@ async def test_delete_team_cascades_skill_assignments(client):
     # Team gone — skill should still exist
     r = await client.get(f"/api/v1/skills/{skill['id']}", headers=HEADERS)
     assert r.status_code == 200
+
+
+# --- Ownership ---
+
+
+@pytest.mark.asyncio
+async def test_create_team_sets_owner_id(client):
+    r = await client.post("/api/v1/teams", json={"name": "Owned Team"}, headers=HEADERS)
+    assert r.status_code == 201
+    data = r.json()
+    assert data["owner_id"] == "test-user-id"
+
+
+@pytest.mark.asyncio
+async def test_create_team_auto_adds_creator_as_admin_member(client):
+    r = await client.post("/api/v1/teams", json={"name": "Member Team"}, headers=HEADERS)
+    team_id = r.json()["id"]
+    detail = await client.get(f"/api/v1/teams/{team_id}", headers=HEADERS)
+    members = detail.json()["members"]
+    assert len(members) == 1
+    assert members[0]["user_id"] == "test-user-id"
+    assert members[0]["role"] == "admin"
+    assert members[0]["can_share"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_team_includes_members(client):
+    r = await client.post("/api/v1/teams", json={"name": "Members Detail Team"}, headers=HEADERS)
+    team_id = r.json()["id"]
+    detail = await client.get(f"/api/v1/teams/{team_id}", headers=HEADERS)
+    data = detail.json()
+    assert "members" in data
+    assert isinstance(data["members"], list)
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_rename_team(client):
+    team = await _create_team(client, "Protected Team")
+    r = await client.put(
+        f"/api/v1/teams/{team['id']}",
+        json={"name": "Hijacked"},
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_delete_team(client):
+    team = await _create_team(client, "No Delete Team")
+    r = await client.delete(f"/api/v1/teams/{team['id']}", headers=OTHER_HEADERS)
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_set_team_skills(client):
+    team = await _create_team(client, "No Skills Team")
+    skill = await _create_skill(client, "protected-skill")
+    r = await client.put(
+        f"/api/v1/teams/{team['id']}/skills",
+        json={"skill_ids": [skill["id"]]},
+        headers=OTHER_HEADERS,
+    )
+    assert r.status_code == 403
