@@ -56,6 +56,21 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["skill_name"],
             },
         ),
+        types.Tool(
+            name="submit_feedback",
+            description=(
+                "Submit feedback on a Locker skill. "
+                "Use this when the user wants to suggest improvements or report issues with a skill."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "skill_name": {"type": "string"},
+                    "feedback_text": {"type": "string"},
+                },
+                "required": ["skill_name", "feedback_text"],
+            },
+        ),
     ]
 
 
@@ -77,6 +92,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                 headers={"X-API-Key": api_key},
             )
             resp.raise_for_status()
+        # Log usage (best-effort)
+        try:
+            from vault.db import get_db
+            from vault.usage import log_usage
+            await log_usage(get_db(), skill_name, team_id=None, source="mcp")
+        except Exception:
+            pass
         return [types.TextContent(type="text", text=f"[LOCKER_TOKEN:{token}]")]
 
     elif name == "list_skills":
@@ -124,11 +146,62 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                         type="text",
                         text=f"Skill '{skill_name}' is not open for access.",
                     )]
+                # Log usage (best-effort)
+                try:
+                    from vault.db import get_db
+                    from vault.usage import log_usage
+                    await log_usage(get_db(), skill_name, team_id=None, source="mcp")
+                except Exception:
+                    pass
                 return [types.TextContent(type="text", text=content)]
         available = [s["name"] for s in data.get("skills", [])]
         return [types.TextContent(
             type="text",
             text=f"Skill '{skill_name}' not found. Available skills: {', '.join(available) or 'none'}",
+        )]
+
+    elif name == "submit_feedback":
+        skill_name = arguments.get("skill_name", "").strip()
+        feedback_text = arguments.get("feedback_text", "").strip()
+        if not skill_name:
+            raise ValueError("skill_name is required")
+        if not feedback_text:
+            raise ValueError("feedback_text is required")
+        if not team_token:
+            return [types.TextContent(
+                type="text",
+                text="No team token provided. Add X-Team-Token to your MCP config headers.",
+            )]
+        # Look up skill ID from employee endpoint
+        async with httpx.AsyncClient() as http:
+            resp = await http.get(
+                f"{vault_url}/api/v1/employee/skills",
+                headers={"X-Team-Token": team_token},
+            )
+            resp.raise_for_status()
+        data = resp.json()
+        skill_id = None
+        for skill in data.get("skills", []):
+            if skill["name"] == skill_name:
+                skill_id = skill.get("id")
+                break
+        if skill_id is None:
+            available = [s["name"] for s in data.get("skills", [])]
+            return [types.TextContent(
+                type="text",
+                text=f"Skill '{skill_name}' not found. Available skills: {', '.join(available) or 'none'}",
+            )]
+        # Submit feedback via API
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                f"{vault_url}/api/v1/skills/{skill_id}/feedback",
+                json={"feedback_text": feedback_text},
+                headers={"X-Team-Token": team_token},
+            )
+            resp.raise_for_status()
+        return [types.TextContent(
+            type="text",
+            text=f"Feedback submitted for skill '{skill_name}'. Thank you!",
         )]
 
     raise ValueError(f"Unknown tool: {name}")

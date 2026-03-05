@@ -214,7 +214,7 @@ async def _setup_team_with_skills(client) -> str:
 async def test_list_skills_returns_names_and_descriptions(client):
     team_token = await _setup_team_with_skills(client)
     with respx.mock:
-        respx.get(f"http://localhost:8000/api/v1/employee/skills").mock(
+        respx.get(f"https://locker.up.railway.app/api/v1/employee/skills").mock(
             return_value=httpx.Response(
                 200,
                 json={
@@ -244,7 +244,7 @@ async def test_list_skills_empty_team(client):
     team_token = team.json()["token"]
 
     with respx.mock:
-        respx.get(f"http://localhost:8000/api/v1/employee/skills").mock(
+        respx.get(f"https://locker.up.railway.app/api/v1/employee/skills").mock(
             return_value=httpx.Response(200, json={"team": "Empty", "skills": []})
         )
         with patch.dict(os.environ, {"LOCKER_TEAM_TOKEN": team_token}):
@@ -266,7 +266,7 @@ async def test_list_skills_scoped_to_team(client):
     team_token = await _setup_team_with_skills(client)
 
     with respx.mock:
-        respx.get(f"http://localhost:8000/api/v1/employee/skills").mock(
+        respx.get(f"https://locker.up.railway.app/api/v1/employee/skills").mock(
             return_value=httpx.Response(
                 200,
                 json={

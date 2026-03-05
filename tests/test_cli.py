@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 import respx
@@ -97,6 +99,58 @@ def test_server_returns_401(tmp_path, monkeypatch):
 
     assert result.exit_code == 1
     assert "401" in result.output
+
+
+# ── Visibility flag tests ────────────────────────────────────────────
+
+
+def test_deploy_with_visibility_flag(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+    monkeypatch.setenv("LOCKER_API_KEY", API_KEY)
+
+    skill_file = tmp_path / "my-skill.txt"
+    skill_file.write_text("content")
+
+    with respx.mock:
+        route = respx.post(f"{VAULT_URL}/api/v1/skills").mock(
+            return_value=httpx.Response(201, json=SKILL_RESPONSE)
+        )
+        result = runner.invoke(app, ["deploy", str(skill_file), "--visibility", "hidden"])
+
+    assert result.exit_code == 0
+    body = json.loads(route.calls[0].request.content)
+    assert body["visibility"] == "hidden"
+
+
+def test_deploy_invalid_visibility(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+    monkeypatch.setenv("LOCKER_API_KEY", API_KEY)
+
+    skill_file = tmp_path / "my-skill.txt"
+    skill_file.write_text("content")
+
+    result = runner.invoke(app, ["deploy", str(skill_file), "--visibility", "invalid"])
+
+    assert result.exit_code == 1
+    assert "Invalid visibility" in result.output
+
+
+def test_deploy_without_visibility_omits_field(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+    monkeypatch.setenv("LOCKER_API_KEY", API_KEY)
+
+    skill_file = tmp_path / "my-skill.txt"
+    skill_file.write_text("content")
+
+    with respx.mock:
+        route = respx.post(f"{VAULT_URL}/api/v1/skills").mock(
+            return_value=httpx.Response(201, json=SKILL_RESPONSE)
+        )
+        result = runner.invoke(app, ["deploy", str(skill_file)])
+
+    assert result.exit_code == 0
+    body = json.loads(route.calls[0].request.content)
+    assert "visibility" not in body
 
 
 # ── Folder deploy tests ──────────────────────────────────────────────
@@ -328,3 +382,94 @@ def test_sync_creates_output_dir(tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert new_dir.exists()
+
+
+# ── Setup tests ──────────────────────────────────────────────────────
+
+
+SKILL_CONTENT = "# /locker skill router\nRoute to the right skill."
+SKILL_URL = "https://raw.githubusercontent.com/ck22coding/locker-skill/main/locker.md"
+
+
+def test_setup_creates_claude_json(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.get(SKILL_URL).mock(return_value=httpx.Response(200, text=SKILL_CONTENT))
+        result = runner.invoke(app, ["setup", "--token", "my-team-token"])
+
+    assert result.exit_code == 0
+    config = json.loads(claude_json.read_text())
+    assert config["mcpServers"]["locker"]["type"] == "sse"
+    assert config["mcpServers"]["locker"]["url"] == "https://locker.up.railway.app/mcp"
+    assert config["mcpServers"]["locker"]["headers"]["X-Team-Token"] == "my-team-token"
+    assert (commands_dir / "locker.md").read_text() == SKILL_CONTENT
+
+
+def test_setup_preserves_existing_config(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    claude_json.write_text(json.dumps({"existingKey": "value", "mcpServers": {"other": {"url": "http://other"}}}))
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.get(SKILL_URL).mock(return_value=httpx.Response(200, text=SKILL_CONTENT))
+        result = runner.invoke(app, ["setup", "--token", "tok"])
+
+    assert result.exit_code == 0
+    config = json.loads(claude_json.read_text())
+    assert config["existingKey"] == "value"
+    assert "other" in config["mcpServers"]
+    assert "locker" in config["mcpServers"]
+
+
+def test_setup_custom_url(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.get(SKILL_URL).mock(return_value=httpx.Response(200, text=SKILL_CONTENT))
+        result = runner.invoke(app, ["setup", "--url", "http://localhost:8000", "--token", "tok"])
+
+    assert result.exit_code == 0
+    config = json.loads(claude_json.read_text())
+    assert config["mcpServers"]["locker"]["url"] == "http://localhost:8000/mcp"
+
+
+def test_setup_overwrites_existing_locker_entry(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    claude_json.write_text(json.dumps({"mcpServers": {"locker": {"url": "http://old/mcp"}}}))
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.get(SKILL_URL).mock(return_value=httpx.Response(200, text=SKILL_CONTENT))
+        result = runner.invoke(app, ["setup", "--token", "new-token"])
+
+    assert result.exit_code == 0
+    config = json.loads(claude_json.read_text())
+    assert config["mcpServers"]["locker"]["headers"]["X-Team-Token"] == "new-token"
+
+
+def test_setup_skill_download_failure_non_fatal(tmp_path, monkeypatch):
+    """Setup should succeed even if skill download fails."""
+    claude_json = tmp_path / ".claude.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.get(SKILL_URL).mock(return_value=httpx.Response(404))
+        result = runner.invoke(app, ["setup", "--token", "tok"])
+
+    assert result.exit_code == 0
+    assert claude_json.exists()
+    assert not (commands_dir / "locker.md").exists()
+    assert "Warning" in result.output

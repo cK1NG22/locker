@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -7,6 +8,10 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from proxy.injector import inject_skills
 from proxy.filter import filter_response
 from proxy.ref_handler import handle_ref_requests
+from vault.db import get_db
+from vault.usage import log_usage
+
+_SKILL_NAME_RE = re.compile(r"\[SKILL:\s*(\S+)\]")
 
 router = APIRouter(prefix="/proxy")
 
@@ -44,6 +49,17 @@ async def anthropic_proxy(request: Request):
     elif resp.status_code == 200 and injected_contents:
         # No ref files — just filter as before
         content = filter_response(resp.content, injected_contents)
+
+    # Log usage for each injected skill
+    if injected_contents:
+        try:
+            db = get_db()
+            system_text = body.get("system", "")
+            skill_names = _SKILL_NAME_RE.findall(system_text)
+            for name in skill_names:
+                await log_usage(db, name, team_id=None, source="proxy")
+        except Exception:
+            pass  # Usage logging is best-effort
 
     return Response(
         content=content,

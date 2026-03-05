@@ -8,7 +8,7 @@ class SkillCreate(BaseModel):
     name: str
     content: str
     description: Optional[str] = None
-    visibility: Visibility = "hidden"
+    visibility: Visibility = "open"
 
 
 class SkillUpdate(BaseModel):
@@ -96,6 +96,7 @@ class TeamSkillsSet(BaseModel):
 
 
 class EmployeeSkill(BaseModel):
+    id: str
     name: str
     description: Optional[str] = None
     content: Optional[str] = None
@@ -124,5 +125,5 @@ class SkillFolderDeploy(BaseModel):
     name: str
     content: str
     description: Optional[str] = None
-    visibility: Visibility = "hidden"
+    visibility: Visibility = "open"
     files: List[SkillFileCreate]

@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS skills (
     name        TEXT NOT NULL UNIQUE,
     content     TEXT NOT NULL,
     description TEXT,
-    visibility  TEXT NOT NULL DEFAULT 'hidden',
+    visibility  TEXT NOT NULL DEFAULT 'open',
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 )
@@ -43,6 +43,27 @@ CREATE TABLE IF NOT EXISTS skill_files (
 )
 """
 
+CREATE_SKILL_USAGE = """
+CREATE TABLE IF NOT EXISTS skill_usage (
+    id          TEXT PRIMARY KEY,
+    skill_name  TEXT NOT NULL,
+    team_id     TEXT,
+    invoked_at  TEXT NOT NULL,
+    source      TEXT NOT NULL
+)
+"""
+
+CREATE_SKILL_FEEDBACK = """
+CREATE TABLE IF NOT EXISTS skill_feedback (
+    id          TEXT PRIMARY KEY,
+    skill_id    TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+    team_id     TEXT,
+    feedback_text TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    created_at  TEXT NOT NULL
+)
+"""
+
 _db: Optional[aiosqlite.Connection] = None
 
 
@@ -56,6 +77,8 @@ async def init_db() -> None:
     await _db.execute(CREATE_TEAMS)
     await _db.execute(CREATE_TEAM_SKILLS)
     await _db.execute(CREATE_SKILL_FILES)
+    await _db.execute(CREATE_SKILL_USAGE)
+    await _db.execute(CREATE_SKILL_FEEDBACK)
     # Migrate existing DBs that lack the visibility column
     try:
         await _db.execute(

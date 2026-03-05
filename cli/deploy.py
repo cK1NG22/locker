@@ -6,7 +6,7 @@ import httpx
 import typer
 
 
-def deploy(file_path: Path, description: Optional[str] = None) -> None:
+def deploy(file_path: Path, description: Optional[str] = None, visibility: Optional[str] = None) -> None:
     vault_url = os.environ.get("LOCKER_VAULT_URL")
     if not vault_url:
         typer.echo("Error: LOCKER_VAULT_URL environment variable is not set.")
@@ -27,6 +27,8 @@ def deploy(file_path: Path, description: Optional[str] = None) -> None:
     payload: dict = {"name": skill_name, "content": content}
     if description is not None:
         payload["description"] = description
+    if visibility is not None:
+        payload["visibility"] = visibility
 
     try:
         r = httpx.post(
@@ -50,7 +52,7 @@ def deploy(file_path: Path, description: Optional[str] = None) -> None:
         raise typer.Exit(code=1)
 
 
-def deploy_folder(folder_path: Path, description: Optional[str] = None) -> None:
+def deploy_folder(folder_path: Path, description: Optional[str] = None, visibility: Optional[str] = None) -> None:
     vault_url = os.environ.get("LOCKER_VAULT_URL")
     if not vault_url:
         typer.echo("Error: LOCKER_VAULT_URL environment variable is not set.")
@@ -83,6 +85,8 @@ def deploy_folder(folder_path: Path, description: Optional[str] = None) -> None:
     payload: dict = {"name": stem, "content": content, "files": files}
     if description is not None:
         payload["description"] = description
+    if visibility is not None:
+        payload["visibility"] = visibility
 
     try:
         r = httpx.post(

@@ -9,6 +9,8 @@ from vault.db import init_db, close_db
 from vault.routes import router as vault_router
 from vault.team_routes import router as team_router
 from vault.employee_routes import router as employee_router
+from vault.usage import router as usage_router
+from vault.feedback import router as feedback_router
 from proxy.routes import router as proxy_router
 from locker_mcp.routes import router as mcp_router
 from locker_mcp.sse_server import mcp_routes
@@ -34,6 +36,8 @@ async def health():
 app.include_router(vault_router)
 app.include_router(team_router)
 app.include_router(employee_router)
+app.include_router(usage_router)
+app.include_router(feedback_router)
 app.include_router(proxy_router)
 app.include_router(mcp_router)
 

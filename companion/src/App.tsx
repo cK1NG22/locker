@@ -5,7 +5,13 @@ import { useSkills } from "./hooks/useSkills";
 
 const TOKEN_KEY = "locker_team_token";
 
+function getJoinToken(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("join") || null;
+}
+
 export default function App() {
+  const [joinToken] = useState<string | null>(getJoinToken);
   const [token, setToken] = useState<string | null>(() =>
     localStorage.getItem(TOKEN_KEY),
   );
@@ -28,7 +34,7 @@ export default function App() {
   };
 
   if (showSetup) {
-    return <TokenSetup onSubmit={setToken} error={token ? error : null} />;
+    return <TokenSetup onSubmit={setToken} error={token ? error : null} initialToken={joinToken} />;
   }
 
   if (loading) {

@@ -31,7 +31,7 @@ async def get_employee_skills(
     team = await _require_team_token(x_team_token)
     db = get_db()
     cursor = await db.execute(
-        "SELECT s.name, s.description, s.visibility, s.content FROM skills s "
+        "SELECT s.id, s.name, s.description, s.visibility, s.content FROM skills s "
         "JOIN team_skills ts ON s.id = ts.skill_id "
         "WHERE ts.team_id = ? AND s.visibility != 'hidden'",
         (team["id"],),
@@ -40,5 +40,5 @@ async def get_employee_skills(
     skills = []
     for row in rows:
         content = decrypt(row["content"]) if row["visibility"] == "open" else None
-        skills.append(EmployeeSkill(name=row["name"], description=row["description"], content=content))
+        skills.append(EmployeeSkill(id=row["id"], name=row["name"], description=row["description"], content=content))
     return {"team": team["name"], "skills": skills}

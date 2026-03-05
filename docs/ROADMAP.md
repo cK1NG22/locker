@@ -76,20 +76,32 @@
   Files: `locker_mcp/sse_server.py`, `main.py`
   `blocked-by: none`
 
-- [ ] **2.9a: Default skill visibility to open**
-  Change deploy default from `hidden` to `open`. Add `--visibility` flag to `locker deploy` CLI.
-  Files: `cli/main.py`, `vault/routes.py`
+- [x] **2.6: Usage tracking**
+  `skill_usage` table, `vault/usage.py` with log + admin endpoints (`GET /api/v1/usage`, `/usage/summary`). Proxy and MCP tools log invocations.
+  Files: `vault/usage.py`, `vault/db.py`, `main.py`, `proxy/routes.py`, `locker_mcp/sse_server.py`
   `blocked-by: none`
 
-- [ ] **2.9b: Zero-friction onboarding: auto MCP config**
-  `locker setup` CLI command writes MCP entry to `~/.claude.json` automatically. User runs one command — no manual JSON editing.
-  Files: `cli/main.py`, new `cli/setup.py`
+- [x] **2.7: Feedback / refine**
+  `skill_feedback` table, `vault/feedback.py` with team-token POST and admin GET/PATCH. `submit_feedback` MCP tool added.
+  Files: `vault/feedback.py`, `vault/db.py`, `main.py`, `locker_mcp/sse_server.py`
+  `blocked-by: 2.6`
+
+- [x] **2.9a: Default skill visibility to open**
+  Default changed from `hidden` to `open` in models and DB. `--visibility/-v` flag added to `locker deploy` CLI.
+  Files: `vault/models.py`, `vault/db.py`, `cli/main.py`, `cli/deploy.py`
   `blocked-by: none`
 
-- [ ] **2.9c: Zero-friction onboarding: invite-based access**
-  Dashboard "Invite Member" flow generates a join link. Recipient clicks → gets a personal API token. Admin sees pending/accepted invites.
+- [x] **2.9b: Zero-friction onboarding: auto MCP config**
+  `locker setup` CLI command writes MCP entry to `~/.claude.json` automatically. `--url` and `--token` flags.
+  Files: `cli/main.py`, `cli/setup.py`
   `blocked-by: none`
 
-- [ ] **2.10: Zero-friction onboarding: auto skill download**
-  `/locker` router skill installs to `~/.claude/commands/locker.md` as part of `locker setup`. One command = MCP config + skill install + token.
+- [x] **2.9c: Zero-friction onboarding: invite-based access**
+  Dashboard "Invite Member" section with copy-to-clipboard link. Companion page auto-fills token from `?join=` URL param.
+  Files: `dashboard/src/components/teams/TeamDetail.tsx`, `companion/src/App.tsx`, `companion/src/components/TokenSetup.tsx`
+  `blocked-by: none`
+
+- [x] **2.10: Zero-friction onboarding: auto skill download**
+  `locker setup` also downloads `locker.md` from GitHub to `~/.claude/commands/`. One command = MCP config + skill install.
+  Files: `cli/setup.py`
   `blocked-by: 2.9b`

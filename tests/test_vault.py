@@ -57,7 +57,7 @@ async def test_create_skill(client):
     data = r.json()
     assert "id" in data
     assert data["name"] == "test-skill"
-    assert data["visibility"] == "hidden"
+    assert data["visibility"] == "open"
     assert "created_at" in data
     assert "content" not in data
 
@@ -127,7 +127,7 @@ async def test_get_skill_by_id(client):
     data = r.json()
     assert data["content"] == "fetch me"
     assert data["id"] == skill_id
-    assert data["visibility"] == "hidden"
+    assert data["visibility"] == "open"
 
 
 @pytest.mark.asyncio
@@ -150,7 +150,7 @@ async def test_get_skill_by_name(client):
     data = r.json()
     assert data["content"] == "named content"
     assert data["name"] == "named-skill"
-    assert data["visibility"] == "hidden"
+    assert data["visibility"] == "open"
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,7 @@ Run with:
     python -m locker_mcp.server
 
 Required env vars:
-    LOCKER_VAULT_URL  — base URL of the Locker server (default: http://localhost:8000)
+    LOCKER_VAULT_URL  — base URL of the Locker server (default: https://locker.up.railway.app)
     LOCKER_API_KEY    — admin API key for the Locker server
 """
 import asyncio
@@ -73,7 +73,7 @@ async def list_tools() -> list[types.Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-    vault_url = os.environ.get("LOCKER_VAULT_URL", "http://localhost:8000")
+    vault_url = os.environ.get("LOCKER_VAULT_URL", "https://locker.up.railway.app")
 
     if name == "use_skill":
         skill_name = arguments.get("skill_name", "").strip()

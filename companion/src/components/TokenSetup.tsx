@@ -3,10 +3,11 @@ import { useState } from "react";
 interface TokenSetupProps {
   onSubmit: (token: string) => void;
   error: string | null;
+  initialToken?: string | null;
 }
 
-export default function TokenSetup({ onSubmit, error }: TokenSetupProps) {
-  const [value, setValue] = useState("");
+export default function TokenSetup({ onSubmit, error, initialToken }: TokenSetupProps) {
+  const [value, setValue] = useState(initialToken ?? "");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +35,12 @@ export default function TokenSetup({ onSubmit, error }: TokenSetupProps) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               autoFocus
             />
+
+            {initialToken && !error && (
+              <p className="mt-2 text-sm text-green-600">
+                Team token auto-filled from invite link
+              </p>
+            )}
 
             {error && (
               <p className="mt-2 text-sm text-red-600">{error}</p>

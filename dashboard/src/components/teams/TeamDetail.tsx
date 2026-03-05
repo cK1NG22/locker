@@ -13,6 +13,7 @@ export default function TeamDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   // Inline rename
   const [editingName, setEditingName] = useState(false);
@@ -170,6 +171,31 @@ export default function TeamDetail() {
         <p className="text-xs text-gray-400 mt-1">
           Share this token with team members for the Companion page.
         </p>
+      </div>
+
+      {/* Invite Member */}
+      <div className="mb-6">
+        <label className="text-xs text-gray-400 uppercase tracking-wide">Invite Member</label>
+        <p className="text-xs text-gray-500 mt-1 mb-2">
+          Share this link with team members. It opens the Companion page with the token pre-filled.
+        </p>
+        <div className="mt-1 flex items-center gap-2">
+          <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono text-gray-700 select-all truncate">
+            {window.location.origin}/companion?join={team.token}
+          </code>
+          <button
+            onClick={async () => {
+              await navigator.clipboard.writeText(
+                `${window.location.origin}/companion?join=${team.token}`
+              );
+              setInviteCopied(true);
+              setTimeout(() => setInviteCopied(false), 1500);
+            }}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
+          >
+            {inviteCopied ? "Copied!" : "Copy Link"}
+          </button>
+        </div>
       </div>
 
       {/* Skill assignment */}
