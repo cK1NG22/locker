@@ -127,7 +127,7 @@ Two supported use cases, both possible within the same team:
   Files: `vault/routes.py`, `dashboard/src/components/teams/`
   `blocked-by: 3.2`
 
-- [ ] **3.4: Skill ownership**
+- [x] **3.4: Skill ownership**
   Add `uploaded_by` (user_id) to skills table. Skills have a `scope`: personal (visible only to uploader) or team. Skill cards in dashboard show who uploaded them.
   Files: `vault/db.py`, `vault/models.py`, `vault/routes.py`, `dashboard/`
   `blocked-by: 3.1`
