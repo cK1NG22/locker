@@ -105,3 +105,39 @@
   `locker setup` also downloads `locker.md` from GitHub to `~/.claude/commands/`. One command = MCP config + skill install.
   Files: `cli/setup.py`
   `blocked-by: 2.9b`
+
+## Phase 3 — Multi-Admin Skill Sharing
+
+Two supported use cases, both possible within the same team:
+- **Use case A (locked IP):** Team admin uploads skills, members consume them invisibly
+- **Use case B (open sharing):** Members with `can_share` permission upload and share skills freely
+
+- [ ] **3.1: User accounts + Google OAuth**
+  `users` table (id, email, name, google_id, created_at). Google OAuth login/signup flow. Session or JWT management. Replaces the current single global API key with real user identity.
+  Files: `src/auth/`, `vault/db.py`, `main.py`, `dashboard/`
+  `blocked-by: none`
+
+- [ ] **3.2: Team ownership model**
+  Add `owner_id` to teams table. New `team_members` table: (team_id, user_id, role: admin|member, can_share: bool). Team creator is auto-assigned as admin. Migrate existing teams.
+  Files: `vault/db.py`, `vault/models.py`, `vault/routes.py`
+  `blocked-by: 3.1`
+
+- [ ] **3.3: Per-member skill permissions**
+  `can_share` toggle on team membership controls whether a member can upload skills to the team. Team admin can flip this per member from the dashboard. Members without `can_share` remain read-only.
+  Files: `vault/routes.py`, `dashboard/src/components/teams/`
+  `blocked-by: 3.2`
+
+- [ ] **3.4: Skill ownership**
+  Add `uploaded_by` (user_id) to skills table. Skills have a `scope`: personal (visible only to uploader) or team. Skill cards in dashboard show who uploaded them.
+  Files: `vault/db.py`, `vault/models.py`, `vault/routes.py`, `dashboard/`
+  `blocked-by: 3.1`
+
+- [ ] **3.5: Cross-team skill copy**
+  Members can share a skill into another team they belong to, creating an independent copy. Eligible skills: their own personal skills, or `open`-visibility team skills. Skills shared this way are owned by the sharer in the target team.
+  Files: `vault/routes.py`, `dashboard/`
+  `blocked-by: 3.3, 3.4`
+
+- [ ] **3.6: Dashboard + UI updates**
+  Sign up / login screens (Google OAuth). Team management UI: invite members, set role, toggle `can_share`. Skill cards show uploader name. Share-to-team action on eligible skills.
+  Files: `dashboard/src/`
+  `blocked-by: 3.5`

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import TokenSetup from "./components/TokenSetup";
 import SkillList from "./components/SkillList";
+import { SetupWizard } from "./components/SetupWizard";
 import { useSkills } from "./hooks/useSkills";
 
 const TOKEN_KEY = "locker_team_token";
@@ -62,10 +63,15 @@ export default function App() {
   }
 
   return (
-    <SkillList
-      team={team!}
-      skills={skills}
-      onChangeToken={handleChangeToken}
-    />
+    <div className="max-w-lg mx-auto">
+      <SkillList
+        team={team!}
+        skills={skills}
+        onChangeToken={handleChangeToken}
+      />
+      <div className="px-4 pb-8">
+        <SetupWizard token={token!} />
+      </div>
+    </div>
   );
 }
