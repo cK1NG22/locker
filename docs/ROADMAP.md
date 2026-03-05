@@ -141,3 +141,9 @@ Two supported use cases, both possible within the same team:
   Sign up / login screens (Google OAuth). Team management UI: invite members, set role, toggle `can_share`. Skill cards show uploader name. Share-to-team action on eligible skills.
   Files: `dashboard/src/`
   `blocked-by: 3.5`
+
+## Phase 4 — To Be Planned
+
+- [ ] **4.1: Skill versioning + maintenance workflow**
+  NEEDS PLANNING. Cover: skill edit history, version snapshots, how edits propagate to users who have synced a skill locally (`locker sync`), how cross-team copies handle upstream edits, and whether there's a "refresh" mechanic. Also covers the admin workflow for iterating on a skill over time without breaking existing users.
+  `blocked-by: 3.6`
