@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 
-from src.auth import require_api_key
+from src.auth import require_user
 from vault.db import get_db
 from vault.crypto import encrypt, decrypt
 from vault.models import (
@@ -21,7 +21,7 @@ from vault.models import (
     SkillFolderDeploy,
 )
 
-router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_key)])
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
 
 
 def _now() -> str:

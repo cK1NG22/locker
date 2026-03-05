@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Sidebar from "./components/Sidebar";
 import Login from "./components/Login";
@@ -9,10 +10,12 @@ import TeamList from "./components/teams/TeamList";
 import TeamDetail from "./components/teams/TeamDetail";
 import TeamForm from "./components/teams/TeamForm";
 
-function AuthenticatedApp() {
-  const { apiKey } = useAuth();
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
 
-  if (!apiKey) return <Login />;
+function AuthenticatedApp() {
+  const { token } = useAuth();
+
+  if (!token) return <Login />;
 
   return (
     <div className="flex min-h-screen">
@@ -34,10 +37,12 @@ function AuthenticatedApp() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter basename="/dashboard">
-        <AuthenticatedApp />
-      </BrowserRouter>
-    </AuthProvider>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <AuthProvider>
+        <BrowserRouter basename="/dashboard">
+          <AuthenticatedApp />
+        </BrowserRouter>
+      </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }

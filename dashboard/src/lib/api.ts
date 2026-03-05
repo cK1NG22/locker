@@ -1,26 +1,26 @@
-const API_KEY_STORAGE = "locker_admin_api_key";
+const TOKEN_STORAGE = "locker_auth_token";
 
-export function getStoredApiKey(): string | null {
-  return localStorage.getItem(API_KEY_STORAGE);
+export function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_STORAGE);
 }
 
-export function setStoredApiKey(key: string): void {
-  localStorage.setItem(API_KEY_STORAGE, key);
+export function setStoredToken(token: string): void {
+  localStorage.setItem(TOKEN_STORAGE, token);
 }
 
-export function clearStoredApiKey(): void {
-  localStorage.removeItem(API_KEY_STORAGE);
+export function clearStoredToken(): void {
+  localStorage.removeItem(TOKEN_STORAGE);
 }
 
 async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const apiKey = getStoredApiKey();
-  if (!apiKey) throw new Error("Not authenticated");
+  const token = getStoredToken();
+  if (!token) throw new Error("Not authenticated");
 
   const headers: Record<string, string> = {
-    "X-API-Key": apiKey,
+    "Authorization": `Bearer ${token}`,
     ...(options.headers as Record<string, string> | undefined),
   };
 
@@ -32,7 +32,7 @@ async function request<T>(
   const res = await fetch(path, { ...options, headers });
 
   if (res.status === 401) {
-    clearStoredApiKey();
+    clearStoredToken();
     throw new Error("Unauthorized");
   }
 
@@ -57,4 +57,7 @@ export const api = {
 
   delete: <T>(path: string) =>
     request<T>(path, { method: "DELETE" }),
+
+  postForm: <T>(path: string, body: FormData) =>
+    request<T>(path, { method: "POST", body }),
 };

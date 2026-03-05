@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.auth import require_api_key
+from src.auth import require_user
 from vault.db import get_db
 from vault.models import (
     TeamCreate,
@@ -14,7 +14,7 @@ from vault.models import (
     TeamSkillsSet,
 )
 
-router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_key)])
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
 
 
 def _now() -> str:

@@ -64,6 +64,16 @@ CREATE TABLE IF NOT EXISTS skill_feedback (
 )
 """
 
+CREATE_USERS = """
+CREATE TABLE IF NOT EXISTS users (
+    id          TEXT PRIMARY KEY,
+    email       TEXT NOT NULL UNIQUE,
+    name        TEXT,
+    google_id   TEXT NOT NULL UNIQUE,
+    created_at  TEXT NOT NULL
+)
+"""
+
 _db: Optional[aiosqlite.Connection] = None
 
 
@@ -79,6 +89,7 @@ async def init_db() -> None:
     await _db.execute(CREATE_SKILL_FILES)
     await _db.execute(CREATE_SKILL_USAGE)
     await _db.execute(CREATE_SKILL_FEEDBACK)
+    await _db.execute(CREATE_USERS)
     # Migrate existing DBs that lack the visibility column
     try:
         await _db.execute(

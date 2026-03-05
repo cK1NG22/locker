@@ -9,13 +9,24 @@ from httpx import AsyncClient, ASGITransport
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 # Set env vars before app import
-TEST_API_KEY = "test-api-key-proxy"
+from datetime import datetime, timezone
+
+import jwt as _jwt
+
+TEST_JWT_SECRET = "test-jwt-secret"
 TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
 
-os.environ["LOCKER_API_KEY"] = TEST_API_KEY
+os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
 os.environ["LOCKER_ENCRYPTION_KEY"] = TEST_ENC_KEY
 os.environ["LOCKER_DB_PATH"] = ":memory:"
 os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
+
+_TEST_PAYLOAD = {
+    "sub": "test-user-id",
+    "email": "test@example.com",
+    "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
+}
+TEST_JWT = _jwt.encode(_TEST_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
 
 from main import app  # noqa: E402
 from vault.db import init_db, close_db  # noqa: E402
@@ -42,7 +53,7 @@ async def client():
 
 
 async def _create_skill(client, name: str, content: str) -> str:
-    headers = {"X-API-Key": os.environ["LOCKER_API_KEY"]}
+    headers = {"Authorization": f"Bearer {TEST_JWT}"}
     r = await client.post(
         "/api/v1/skills",
         json={"name": name, "content": content},
@@ -283,7 +294,7 @@ async def test_response_no_filtering_without_injection(client):
 
 
 async def _create_skill_with_files(client, name: str, content: str, files: list[dict]) -> str:
-    headers = {"X-API-Key": os.environ["LOCKER_API_KEY"]}
+    headers = {"Authorization": f"Bearer {TEST_JWT}"}
     r = await client.post(
         "/api/v1/skills",
         json={"name": name, "content": content},

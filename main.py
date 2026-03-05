@@ -1,11 +1,14 @@
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from vault.db import init_db, close_db
+from src.auth.oauth import router as auth_router
 from vault.routes import router as vault_router
 from vault.team_routes import router as team_router
 from vault.employee_routes import router as employee_router
@@ -33,6 +36,39 @@ async def health():
     return {"status": "ok"}
 
 
+UUID_RE = re.compile(r'^[0-9a-f\-]{36}$')
+
+@app.get("/setup/{team_token}", response_class=PlainTextResponse)
+async def setup_script(team_token: str, request: Request):
+    if not UUID_RE.match(team_token):
+        return PlainTextResponse("Invalid token format.", status_code=400)
+    server_url = str(request.base_url).rstrip("/")
+    skill_router_url = "https://raw.githubusercontent.com/ck22coding/locker-skill/main/locker.md"
+    script = f"""#!/bin/bash
+set -e
+echo "Setting up Locker..."
+python3 - <<'PYEOF'
+import json, pathlib
+p = pathlib.Path.home() / '.claude.json'
+cfg = json.loads(p.read_text()) if p.exists() else {{}}
+cfg.setdefault('mcpServers', {{}})['locker'] = {{
+    'type': 'sse',
+    'url': '{server_url}/mcp',
+    'headers': {{'X-Team-Token': '{team_token}'}}
+}}
+p.write_text(json.dumps(cfg, indent=2))
+print("MCP config written.")
+PYEOF
+mkdir -p ~/.claude/commands
+curl -fsSL {skill_router_url} -o ~/.claude/commands/locker.md
+echo "Skill router installed."
+echo ""
+echo "Done! Restart Claude Code, then try: /locker code-review"
+"""
+    return PlainTextResponse(script, media_type="text/plain")
+
+
+app.include_router(auth_router)
 app.include_router(vault_router)
 app.include_router(team_router)
 app.include_router(employee_router)

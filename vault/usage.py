@@ -6,10 +6,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from src.auth import require_api_key
+from src.auth import require_user
 from vault.db import get_db
 
-router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_key)])
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
 
 
 async def log_usage(db, skill_name: str, team_id: Optional[str], source: str) -> None:

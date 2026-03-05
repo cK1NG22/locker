@@ -1,40 +1,56 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
-import { getStoredApiKey, setStoredApiKey, clearStoredApiKey } from "../lib/api";
+import { getStoredToken, setStoredToken, clearStoredToken } from "../lib/api";
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+}
 
 interface AuthContextValue {
-  apiKey: string | null;
-  login: (key: string) => Promise<boolean>;
+  token: string | null;
+  user: User | null;
+  loginWithGoogle: (googleToken: string) => Promise<boolean>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [apiKey, setApiKey] = useState<string | null>(getStoredApiKey);
+  const [token, setToken] = useState<string | null>(getStoredToken);
+  const [user, setUser] = useState<User | null>(() => {
+    const stored = localStorage.getItem("locker_user");
+    return stored ? JSON.parse(stored) : null;
+  });
 
-  const login = useCallback(async (key: string): Promise<boolean> => {
+  const loginWithGoogle = useCallback(async (googleToken: string): Promise<boolean> => {
     try {
-      const res = await fetch("/api/v1/skills", {
-        headers: { "X-API-Key": key },
+      const res = await fetch("/api/v1/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: googleToken }),
       });
-      if (res.ok) {
-        setStoredApiKey(key);
-        setApiKey(key);
-        return true;
-      }
-      return false;
+      if (!res.ok) return false;
+      const data = await res.json();
+      setStoredToken(data.access_token);
+      setToken(data.access_token);
+      setUser(data.user);
+      localStorage.setItem("locker_user", JSON.stringify(data.user));
+      return true;
     } catch {
       return false;
     }
   }, []);
 
   const logout = useCallback(() => {
-    clearStoredApiKey();
-    setApiKey(null);
+    clearStoredToken();
+    localStorage.removeItem("locker_user");
+    setToken(null);
+    setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ apiKey, login, logout }}>
+    <AuthContext.Provider value={{ token, user, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );
