@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq5 && rm -r
 
 WORKDIR /app
 
+ARG RAILWAY_GIT_COMMIT_SHA
 COPY pyproject.toml .
 COPY . .
 RUN pip install --no-cache-dir .
