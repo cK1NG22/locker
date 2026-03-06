@@ -1,49 +1,35 @@
-# Worktree Task: 3.1 — User Accounts + Google OAuth
+# Worktree Task: 4.5 — Rate limiting
+
+## Task ID
+4.5
 
 ## Branch
-`dung/3.1-user-accounts-google-oauth`
+`dung/4.5-rate-limiting`
 
-## Task Description
-Add real user accounts and Google OAuth login/signup to Locker. This replaces the current single global API key admin model with individual user identities.
+## Description
+Add per-IP and per-token rate limiting via `slowapi` middleware. Key limits: employee endpoints (60 req/min per token), admin endpoints (120 req/min per user), auth endpoint (10 req/min per IP). Log rate-limit hits.
 
-Specifically:
-- `users` table: id, email, name, google_id, created_at
-- Google OAuth login/signup flow (Google is the provider)
-- Session or JWT management (JWT preferred — evaluate and decide)
-- The current single `X-API-Key` global admin auth must coexist during transition OR be fully replaced — evaluate the migration path carefully
-- Dashboard must get a login/signup screen powered by OAuth
-- Any route currently protected by `X-API-Key` needs to be updated to use user identity
-
-Files likely affected: `src/auth/`, `vault/db.py`, `main.py`, `dashboard/`
+## Files to Create/Modify
+- `main.py`
+- `pyproject.toml`
+- New `src/middleware/rate_limit.py`
 
 ## Dependencies (all complete)
-None — this is the foundation task.
+- None
 
-## Downstream Impact
-These tasks are waiting on this one:
-- **3.2: Team ownership model** — needs user IDs to assign team owners and populate team_members
-- **3.4: Skill ownership** — needs user IDs to track who uploaded each skill
+## Downstream Tasks (blocked by this task)
+- None directly
 
-## Project Context
-- Project CLAUDE.md: `../CLAUDE.md` (relative to worktree root = repo root)
-- Full roadmap: `../docs/ROADMAP.md`
-- Auth directory (sharp edge — read CLAUDE.md warning): `../src/auth/`
+## Key Context
+- FastAPI app defined in `main.py`
+- Admin routes use `Authorization: Bearer <jwt>` (JWT contains user sub)
+- Employee routes use `X-Team-Token` header
+- Auth endpoint: `POST /auth/google` in `src/auth/oauth.py`
+- Proxy endpoint: `/proxy/anthropic/v1/messages`
+- `slowapi` is a popular FastAPI rate-limiting library built on `limits`
 
-## Key Decisions Already Made
-- OAuth provider: Google
-- Cross-team skill sharing uses copy (not live links)
-- Team creator = team admin
-- Per-member `can_share` toggle controls upload permissions
-
-## Instructions
-1. Read this file to understand your task scope.
-2. Read `../docs/ROADMAP.md` Phase 3 section for full context.
-3. Read `../src/auth/` carefully — this is a sharp edge per CLAUDE.md.
-4. Run `/opusplan` to create a detailed implementation plan.
-5. Get user approval on the plan before building anything.
-6. When done, commit your changes to this branch.
-
-## Cleanup
-When this task is complete:
-1. Mark task `3.1` as `[x]` in `../docs/ROADMAP.md`
-2. From the main repo run: `git worktree remove .claude/worktrees/dung/3.1-user-accounts-google-oauth`
+## Project References
+- Project CLAUDE.md: `../../CLAUDE.md` (from project root)
+- Roadmap: `docs/ROADMAP.md`
+- Main app: `main.py`
+- Auth routes: `src/auth/oauth.py`

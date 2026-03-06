@@ -4,8 +4,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
+
+from src.middleware.rate_limit import limiter
 
 from src.auth import require_user
 from vault.db import get_db
@@ -56,7 +58,9 @@ router = APIRouter(prefix="/api/v1")
 
 
 @router.post("/skills/{skill_id}/feedback", status_code=201)
+@limiter.limit("60/minute")
 async def post_feedback(
+    request: Request,
     skill_id: str,
     body: FeedbackBody,
     x_team_token: Optional[str] = Header(None, alias="X-Team-Token"),

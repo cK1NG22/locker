@@ -2,11 +2,12 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
+from src.middleware.rate_limit import limiter
 from vault.db import get_db
 from src.auth.jwt import create_token
 
@@ -18,7 +19,8 @@ class GoogleTokenRequest(BaseModel):
 
 
 @router.post("/google")
-async def google_login(body: GoogleTokenRequest):
+@limiter.limit("10/minute")
+async def google_login(request: Request, body: GoogleTokenRequest):
     client_id = os.environ.get("GOOGLE_CLIENT_ID")
     if not client_id:
         raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID not configured")

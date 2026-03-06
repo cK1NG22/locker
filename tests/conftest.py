@@ -155,3 +155,7 @@ def _truncate_tables(pg_container):
     loop = asyncio.get_event_loop_policy().new_event_loop()
     loop.run_until_complete(_truncate())
     loop.close()
+
+    # Reset rate limiter state so limits don't leak between tests
+    from src.middleware.rate_limit import limiter
+    limiter.reset()
