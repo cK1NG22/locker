@@ -7,7 +7,7 @@ import {
   type SkillFileFull,
 } from "../../hooks/useSkills";
 import { useAuth } from "../../context/AuthContext";
-import { useTeams, type TeamSummary } from "../../hooks/useTeams";
+import { useTeams } from "../../hooks/useTeams";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
