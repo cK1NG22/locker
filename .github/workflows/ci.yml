@@ -24,7 +24,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install .[dev]
+      - run: pip install --upgrade pip
+      - run: pip install . && pip install pytest pytest-asyncio httpx respx "testcontainers[postgres]" ruff
       - run: python -m pytest -v
 
   docker-build:

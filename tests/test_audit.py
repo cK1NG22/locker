@@ -148,7 +148,7 @@ async def test_skill_create_produces_audit_log(client):
     r = await client.get("/api/v1/audit-log?action=skill.create", headers=HEADERS)
     assert r.status_code == 200
     logs = r.json()["logs"]
-    matching = [l for l in logs if l["resource_id"] == skill_id]
+    matching = [entry for entry in logs if entry["resource_id"] == skill_id]
     assert len(matching) == 1
     assert matching[0]["resource_type"] == "skill"
     assert matching[0]["actor_id"] == "test-user-id"
@@ -175,7 +175,7 @@ async def test_skill_delete_produces_audit_log(client):
     r = await client.get("/api/v1/audit-log?action=skill.delete", headers=HEADERS)
     assert r.status_code == 200
     logs = r.json()["logs"]
-    matching = [l for l in logs if l["resource_id"] == skill_id]
+    matching = [entry for entry in logs if entry["resource_id"] == skill_id]
     assert len(matching) == 1
     assert matching[0]["resource_type"] == "skill"
     assert matching[0]["actor_id"] == "test-user-id"
@@ -196,7 +196,7 @@ async def test_team_create_produces_audit_log(client):
     r = await client.get("/api/v1/audit-log?action=team.create", headers=HEADERS)
     assert r.status_code == 200
     logs = r.json()["logs"]
-    matching = [l for l in logs if l["resource_id"] == team_id]
+    matching = [entry for entry in logs if entry["resource_id"] == team_id]
     assert len(matching) == 1
     assert matching[0]["resource_type"] == "team"
     assert matching[0]["actor_id"] == "test-user-id"
