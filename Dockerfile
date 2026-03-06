@@ -2,17 +2,17 @@ FROM node:22-slim AS companion-build
 
 WORKDIR /build
 COPY companion/package.json companion/package-lock.json ./
-RUN npm ci
+RUN NODE_OPTIONS=--max-old-space-size=512 npm ci
 COPY companion/ .
-RUN npm run build
+RUN NODE_OPTIONS=--max-old-space-size=512 npm run build
 
 FROM node:22-slim AS dashboard-build
 
 WORKDIR /build
 COPY dashboard/package.json dashboard/package-lock.json ./
-RUN npm ci
+RUN NODE_OPTIONS=--max-old-space-size=512 npm ci
 COPY dashboard/ .
-RUN npm run build
+RUN NODE_OPTIONS=--max-old-space-size=512 npm run build
 
 FROM python:3.11-slim
 
