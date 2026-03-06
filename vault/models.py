@@ -103,7 +103,16 @@ class TeamMemberAdd(BaseModel):
 class TeamOut(BaseModel):
     id: str
     name: str
+    token_prefix: str
+    owner_id: Optional[str] = None
+    created_at: str
+
+
+class TeamCreated(BaseModel):
+    id: str
+    name: str
     token: str
+    token_prefix: str
     owner_id: Optional[str] = None
     created_at: str
 
@@ -117,7 +126,7 @@ class TeamSummary(BaseModel):
 class TeamDetail(BaseModel):
     id: str
     name: str
-    token: str
+    token_prefix: str
     owner_id: Optional[str] = None
     created_at: str
     skills: List[str]

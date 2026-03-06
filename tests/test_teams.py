@@ -56,6 +56,8 @@ async def test_create_team(client):
     assert data["name"] == "Engineering"
     assert "id" in data
     assert "token" in data
+    assert "token_prefix" in data
+    assert data["token"][:8] == data["token_prefix"]
     assert "created_at" in data
 
 
@@ -95,6 +97,8 @@ async def test_get_team(client):
     data = r.json()
     assert data["name"] == "Detail Team"
     assert data["skills"] == []
+    assert "token_prefix" in data
+    assert "token" not in data
 
 
 @pytest.mark.asyncio
@@ -806,6 +810,48 @@ async def test_copy_is_independent_of_original(client):
     copy_detail = await client.get(f"/api/v1/skills/{new_id}", headers=HEADERS)
     assert copy_detail.status_code == 200
     assert copy_detail.json()["content"] == "original content"
+
+
+@pytest.mark.asyncio
+async def test_get_team_hides_full_token(client):
+    team = await _create_team(client, "Hidden Token Team")
+    r = await client.get(f"/api/v1/teams/{team['id']}", headers=HEADERS)
+    data = r.json()
+    assert "token" not in data
+    assert "token_prefix" in data
+    assert len(data["token_prefix"]) == 8
+
+
+@pytest.mark.asyncio
+async def test_rotate_token_returns_new_token(client):
+    team = await _create_team(client, "Rotate Team")
+    old_token = team["token"]
+    r = await client.post(f"/api/v1/teams/{team['id']}/rotate-token", headers=HEADERS)
+    assert r.status_code == 200
+    data = r.json()
+    assert "token" in data
+    assert "token_prefix" in data
+    assert data["token"] != old_token
+    assert data["token"][:8] == data["token_prefix"]
+    # New token works for employee endpoint
+    emp_r = await client.get("/api/v1/employee/skills", headers={"X-Team-Token": data["token"]})
+    assert emp_r.status_code == 200
+    # Old token no longer works
+    emp_old = await client.get("/api/v1/employee/skills", headers={"X-Team-Token": old_token})
+    assert emp_old.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_rotate_token_requires_admin(client):
+    team = await _create_team(client, "Rotate Admin Team")
+    r = await client.post(f"/api/v1/teams/{team['id']}/rotate-token", headers=OTHER_HEADERS)
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_rotate_token_missing_team_404(client):
+    r = await client.post("/api/v1/teams/nonexistent/rotate-token", headers=HEADERS)
+    assert r.status_code == 404
 
 
 @pytest.mark.asyncio

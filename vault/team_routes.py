@@ -10,6 +10,7 @@ from vault.models import (
     TeamCreate,
     TeamUpdate,
     TeamOut,
+    TeamCreated,
     TeamSummary,
     TeamDetail,
     TeamMemberOut,
@@ -18,6 +19,7 @@ from vault.models import (
     TeamSkillsSet,
     SkillCopied,
 )
+from vault.token_utils import generate_token
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
 
@@ -64,11 +66,11 @@ async def _require_team_share(team_id: str, user_id: str) -> None:
     raise HTTPException(status_code=403, detail="Team share access required")
 
 
-@router.post("/teams", status_code=201, response_model=TeamOut)
+@router.post("/teams", status_code=201, response_model=TeamCreated)
 async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
     team_id = str(uuid.uuid4())
     member_id = str(uuid.uuid4())
-    token = str(uuid.uuid4())
+    plaintext, token_hash, token_prefix = generate_token()
     now = _now()
     user_id = user["sub"]
     db = get_db()
@@ -76,8 +78,8 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
         async with conn.transaction():
             try:
                 await conn.execute(
-                    "INSERT INTO teams (id, name, token, owner_id, created_at) VALUES ($1, $2, $3, $4, $5)",
-                    team_id, body.name, token, user_id, now,
+                    "INSERT INTO teams (id, name, token_hash, token_prefix, owner_id, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+                    team_id, body.name, token_hash, token_prefix, user_id, now,
                 )
             except UniqueViolationError:
                 raise HTTPException(status_code=409, detail=f"Team '{body.name}' already exists")
@@ -85,7 +87,7 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
                 "INSERT INTO team_members (id, team_id, user_id, role, can_share, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
                 member_id, team_id, user_id, "admin", True, now,
             )
-    return TeamOut(id=team_id, name=body.name, token=token, owner_id=user_id, created_at=now)
+    return TeamCreated(id=team_id, name=body.name, token=plaintext, token_prefix=token_prefix, owner_id=user_id, created_at=now)
 
 
 @router.get("/teams", response_model=list[TeamSummary])
@@ -106,7 +108,7 @@ async def list_teams():
 async def get_team(team_id: str):
     db = get_db()
     row = await db.fetchrow(
-        "SELECT id, name, token, owner_id, created_at FROM teams WHERE id = $1", team_id
+        "SELECT id, name, token_prefix, owner_id, created_at FROM teams WHERE id = $1", team_id
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -136,7 +138,7 @@ async def get_team(team_id: str):
     return TeamDetail(
         id=row["id"],
         name=row["name"],
-        token=row["token"],
+        token_prefix=row["token_prefix"],
         owner_id=row["owner_id"],
         created_at=row["created_at"],
         skills=skill_names,
@@ -149,7 +151,7 @@ async def update_team(team_id: str, body: TeamUpdate, user: dict = Depends(requi
     await _require_team_admin(team_id, user["sub"])
     db = get_db()
     row = await db.fetchrow(
-        "SELECT id, name, token, owner_id, created_at FROM teams WHERE id = $1", team_id
+        "SELECT id, name, token_prefix, owner_id, created_at FROM teams WHERE id = $1", team_id
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -160,7 +162,7 @@ async def update_team(team_id: str, body: TeamUpdate, user: dict = Depends(requi
     except UniqueViolationError:
         raise HTTPException(status_code=409, detail=f"Team '{body.name}' already exists")
     return TeamOut(
-        id=row["id"], name=body.name, token=row["token"], owner_id=row["owner_id"], created_at=row["created_at"]
+        id=row["id"], name=body.name, token_prefix=row["token_prefix"], owner_id=row["owner_id"], created_at=row["created_at"]
     )
 
 
@@ -169,6 +171,26 @@ async def delete_team(team_id: str, user: dict = Depends(require_user)):
     await _require_team_admin(team_id, user["sub"])
     db = get_db()
     await db.execute("DELETE FROM teams WHERE id = $1", team_id)
+
+
+@router.post("/teams/{team_id}/rotate-token", response_model=TeamCreated)
+async def rotate_token(team_id: str, user: dict = Depends(require_user)):
+    await _require_team_admin(team_id, user["sub"])
+    db = get_db()
+    row = await db.fetchrow(
+        "SELECT id, name, owner_id, created_at FROM teams WHERE id = $1", team_id
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+    plaintext, token_hash, token_prefix = generate_token()
+    await db.execute(
+        "UPDATE teams SET token_hash = $1, token_prefix = $2 WHERE id = $3",
+        token_hash, token_prefix, team_id,
+    )
+    return TeamCreated(
+        id=row["id"], name=row["name"], token=plaintext, token_prefix=token_prefix,
+        owner_id=row["owner_id"], created_at=row["created_at"],
+    )
 
 
 @router.put("/teams/{team_id}/skills", status_code=200)
