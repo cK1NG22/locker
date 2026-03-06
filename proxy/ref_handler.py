@@ -29,20 +29,18 @@ async def _resolve_ref(skill_name: str, file_path: str) -> str:
     """Look up a skill by name, then fetch and decrypt the referenced file."""
     db = get_db()
 
-    cursor = await db.execute(
-        "SELECT id FROM skills WHERE name = ?", (skill_name,)
+    skill_row = await db.fetchrow(
+        "SELECT id FROM skills WHERE name = $1", skill_name
     )
-    skill_row = await cursor.fetchone()
     if skill_row is None:
         return f"[error] Skill '{skill_name}' not found in vault."
 
     skill_id = skill_row["id"]
 
-    cursor = await db.execute(
-        "SELECT content FROM skill_files WHERE skill_id = ? AND path = ?",
-        (skill_id, file_path),
+    file_row = await db.fetchrow(
+        "SELECT content FROM skill_files WHERE skill_id = $1 AND path = $2",
+        skill_id, file_path,
     )
-    file_row = await cursor.fetchone()
     if file_row is None:
         return f"[error] File '{file_path}' not found for skill '{skill_name}'."
 

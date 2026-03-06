@@ -15,10 +15,9 @@ async def _require_team_token(
     if not x_team_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
     db = get_db()
-    cursor = await db.execute(
-        "SELECT id, name FROM teams WHERE token = ?", (x_team_token,)
+    row = await db.fetchrow(
+        "SELECT id, name FROM teams WHERE token = $1", x_team_token
     )
-    row = await cursor.fetchone()
     if row is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return {"id": row["id"], "name": row["name"]}
@@ -30,13 +29,12 @@ async def get_employee_skills(
 ):
     team = await _require_team_token(x_team_token)
     db = get_db()
-    cursor = await db.execute(
+    rows = await db.fetch(
         "SELECT s.id, s.name, s.description, s.visibility, s.content FROM skills s "
         "JOIN team_skills ts ON s.id = ts.skill_id "
-        "WHERE ts.team_id = ? AND s.visibility != 'hidden' AND s.scope = 'team'",
-        (team["id"],),
+        "WHERE ts.team_id = $1 AND s.visibility != 'hidden' AND s.scope = 'team'",
+        team["id"],
     )
-    rows = await cursor.fetchall()
     skills = []
     for row in rows:
         content = decrypt(row["content"]) if row["visibility"] == "open" else None

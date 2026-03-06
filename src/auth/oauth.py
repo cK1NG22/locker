@@ -38,23 +38,21 @@ async def google_login(body: GoogleTokenRequest):
     now = datetime.now(timezone.utc).isoformat()
 
     # Upsert user
-    async with db.execute(
-        "SELECT id FROM users WHERE google_id = ?", (google_id,)
-    ) as cur:
-        row = await cur.fetchone()
+    row = await db.fetchrow(
+        "SELECT id FROM users WHERE google_id = $1", google_id
+    )
 
     if row:
         user_id = row["id"]
         await db.execute(
-            "UPDATE users SET name = ? WHERE id = ?", (name, user_id)
+            "UPDATE users SET name = $1 WHERE id = $2", name, user_id
         )
     else:
         user_id = str(uuid.uuid4())
         await db.execute(
-            "INSERT INTO users (id, email, name, google_id, created_at) VALUES (?, ?, ?, ?, ?)",
-            (user_id, email, name, google_id, now),
+            "INSERT INTO users (id, email, name, google_id, created_at) VALUES ($1, $2, $3, $4, $5)",
+            user_id, email, name, google_id, now,
         )
-    await db.commit()
 
     access_token = create_token(user_id, email)
     return {

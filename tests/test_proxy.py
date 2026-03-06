@@ -1,35 +1,14 @@
-import base64
 import json
-import os
 import pytest
 import pytest_asyncio
 import respx
 import httpx
 from httpx import AsyncClient, ASGITransport
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-# Set env vars before app import
-from datetime import datetime, timezone
+from tests.conftest import TEST_JWT
 
-import jwt as _jwt
-
-TEST_JWT_SECRET = "test-jwt-secret-that-is-long-enough-for-hs256"
-TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
-
-os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
-os.environ["LOCKER_ENCRYPTION_KEY"] = TEST_ENC_KEY
-os.environ["LOCKER_DB_PATH"] = ":memory:"
-os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
-
-_TEST_PAYLOAD = {
-    "sub": "test-user-id",
-    "email": "test@example.com",
-    "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
-}
-TEST_JWT = _jwt.encode(_TEST_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
-
-from main import app  # noqa: E402
-from vault.db import init_db, close_db  # noqa: E402
+from main import app
+from vault.db import init_db, close_db
 
 FAKE_ANTHROPIC_RESPONSE = {
     "id": "msg_test",
@@ -336,13 +315,11 @@ async def test_skill_with_files_injects_manifest(client):
         assert r.status_code == 200
         forwarded_body = json.loads(route.calls[0].request.content)
 
-    # Manifest appears in the system prompt
     system = forwarded_body["system"]
     assert "[AVAILABLE REFERENCES]" in system
     assert "data/report.md" in system
-    assert "bytes" in system  # size_bytes annotation
+    assert "bytes" in system
 
-    # locker_read_ref tool is registered in the tools array
     tools = forwarded_body.get("tools", [])
     tool_names = [t["name"] for t in tools]
     assert "locker_read_ref" in tool_names
@@ -364,11 +341,9 @@ async def test_skill_without_files_no_manifest(client):
         assert r.status_code == 200
         forwarded_body = json.loads(route.calls[0].request.content)
 
-    # No manifest in system prompt
     system = forwarded_body["system"]
     assert "[AVAILABLE REFERENCES]" not in system
 
-    # No locker_read_ref tool registered
     tools = forwarded_body.get("tools", [])
     tool_names = [t.get("name") for t in tools]
     assert "locker_read_ref" not in tool_names
@@ -391,7 +366,6 @@ async def test_ref_handler_resolves_tool_use(client):
         "max_tokens": 200,
     }
 
-    # First Anthropic response: tool_use requesting the reference file
     tool_use_response = httpx.Response(
         200,
         json={
@@ -415,7 +389,6 @@ async def test_ref_handler_resolves_tool_use(client):
         },
     )
 
-    # Second Anthropic response: final text answer (includes file content to test filtering)
     final_response = httpx.Response(
         200,
         json={
@@ -444,11 +417,8 @@ async def test_ref_handler_resolves_tool_use(client):
     body = r.json()
     response_text = body["content"][0]["text"]
 
-    # Final response text is returned to client
     assert "Based on my analysis:" in response_text
     assert "The data looks good." in response_text
 
-    # Injected skill content is filtered out of the final response
     assert "Analyze the reference files." not in response_text
-    # Reference file content is also filtered (it was injected via tool_result)
     assert file_content not in response_text

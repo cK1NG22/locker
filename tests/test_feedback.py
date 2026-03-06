@@ -1,30 +1,11 @@
-import base64
-import os
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from datetime import datetime, timezone
+from tests.conftest import TEST_JWT
 
-import jwt as _jwt
-
-TEST_JWT_SECRET = "test-jwt-secret-that-is-long-enough-for-hs256"
-TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
-
-os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
-os.environ["LOCKER_ENCRYPTION_KEY"] = TEST_ENC_KEY
-os.environ["LOCKER_DB_PATH"] = ":memory:"
-
-_TEST_PAYLOAD = {
-    "sub": "test-user-id",
-    "email": "test@example.com",
-    "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
-}
-TEST_JWT = _jwt.encode(_TEST_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
-
-from main import app  # noqa: E402
-from vault.db import init_db, close_db  # noqa: E402
+from main import app
+from vault.db import init_db, close_db
 
 ADMIN = {"Authorization": f"Bearer {TEST_JWT}"}
 
@@ -113,7 +94,6 @@ async def test_update_feedback_status(client):
 @pytest.mark.asyncio
 async def test_feedback_filter_by_status(client):
     skill_id, token = await _create_skill_and_team(client)
-    # Submit two feedback items
     f1 = await client.post(
         f"/api/v1/skills/{skill_id}/feedback",
         json={"feedback_text": "First feedback"},
@@ -124,19 +104,16 @@ async def test_feedback_filter_by_status(client):
         json={"feedback_text": "Second feedback"},
         headers={"X-Team-Token": token},
     )
-    # Mark first as reviewed
     await client.patch(
         f"/api/v1/feedback/{f1.json()['id']}",
         json={"status": "reviewed"},
         headers=ADMIN,
     )
-    # Filter by pending — should only get second
     r = await client.get("/api/v1/feedback?status=pending", headers=ADMIN)
     assert r.status_code == 200
     pending = r.json()["feedback"]
     assert len(pending) == 1
     assert pending[0]["feedback_text"] == "Second feedback"
-    # Filter by reviewed — should only get first
     r2 = await client.get("/api/v1/feedback?status=reviewed", headers=ADMIN)
     reviewed = r2.json()["feedback"]
     assert len(reviewed) == 1

@@ -1,36 +1,11 @@
-import base64
-import os
-from datetime import datetime, timezone
-
-import jwt as _jwt
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-TEST_JWT_SECRET = "test-jwt-secret-that-is-long-enough-for-hs256"
-TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
+from tests.conftest import TEST_JWT, OTHER_JWT
 
-os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
-os.environ["LOCKER_ENCRYPTION_KEY"] = TEST_ENC_KEY
-os.environ["LOCKER_DB_PATH"] = ":memory:"
-
-_TEST_PAYLOAD = {
-    "sub": "test-user-id",
-    "email": "test@example.com",
-    "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
-}
-TEST_JWT = _jwt.encode(_TEST_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
-
-_OTHER_PAYLOAD = {
-    "sub": "other-user-id",
-    "email": "other@example.com",
-    "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
-}
-OTHER_JWT = _jwt.encode(_OTHER_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
-
-from main import app  # noqa: E402
-from vault.db import init_db, close_db  # noqa: E402
+from main import app
+from vault.db import init_db, close_db
 
 HEADERS = {"Authorization": f"Bearer {TEST_JWT}"}
 OTHER_HEADERS = {"Authorization": f"Bearer {OTHER_JWT}"}
@@ -331,14 +306,13 @@ async def _add_other_user_to_db(client):
     from vault.db import get_db
     db = get_db()
     await db.execute(
-        "INSERT OR IGNORE INTO users (id, email, name, google_id, created_at) VALUES (?, ?, ?, ?, ?)",
-        ("other-user-id", "other@example.com", "Other User", "google-other", "2026-01-01T00:00:00"),
+        "INSERT INTO users (id, email, name, google_id, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+        "other-user-id", "other@example.com", "Other User", "google-other", "2026-01-01T00:00:00",
     )
     await db.execute(
-        "INSERT OR IGNORE INTO users (id, email, name, google_id, created_at) VALUES (?, ?, ?, ?, ?)",
-        ("test-user-id", "test@example.com", "Test User", "google-test", "2026-01-01T00:00:00"),
+        "INSERT INTO users (id, email, name, google_id, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+        "test-user-id", "test@example.com", "Test User", "google-test", "2026-01-01T00:00:00",
     )
-    await db.commit()
 
 
 async def _add_member_to_team(client, team_id, can_share=False):
@@ -738,10 +712,7 @@ async def test_copy_unowned_personal_skill_rejected(client):
 @pytest.mark.asyncio
 async def test_copy_to_team_user_not_member_of_rejected(client):
     skill = await _create_skill_full(client, "not-member-skill", scope="personal")
-    # Create team2 but do NOT add test_user (they're admin, so this won't work as a test)
-    # Instead: use other_user trying to copy to a team they're not in
     target_team = await _create_team(client, "Members Only Team")
-    # other_user is not a member of target_team
     r = await client.post(
         f"/api/v1/skills/{skill['id']}/copy-to-team/{target_team['id']}",
         headers=OTHER_HEADERS,
@@ -751,13 +722,11 @@ async def test_copy_to_team_user_not_member_of_rejected(client):
 
 @pytest.mark.asyncio
 async def test_copy_without_can_share_in_target_team_rejected(client):
-    # other_user has open team skill via source team; target team has no can_share
     skill = await _create_skill_full(client, "no-share-perm-skill", scope="team", visibility="open")
     source_team = await _create_team(client, "No Share Source Team")
     target_team = await _create_team(client, "No Share Target Team")
     await _assign_skill_to_team(client, source_team["id"], skill["id"])
     await _add_other_user_to_db(client)
-    # Add other_user to source team (so they're eligible) and target team (without can_share)
     await client.post(
         f"/api/v1/teams/{source_team['id']}/members",
         json={"email": "other@example.com"},
@@ -782,7 +751,6 @@ async def test_copy_duplicate_name_in_target_team_rejected(client):
     source_team = await _create_team(client, "Dup Source Team")
     target_team = await _create_team(client, "Dup Target Team")
     await _assign_skill_to_team(client, source_team["id"], skill["id"])
-    # Create a skill with the SAME name in target team directly
     same_name_skill = await _create_skill_full(client, "dup-name-skill", scope="team", visibility="open")
     await _assign_skill_to_team(client, target_team["id"], same_name_skill["id"])
     r = await client.post(
@@ -795,7 +763,6 @@ async def test_copy_duplicate_name_in_target_team_rejected(client):
 @pytest.mark.asyncio
 async def test_copy_includes_all_skill_files(client):
     skill = await _create_skill_full(client, "multifile-skill", scope="personal")
-    # Add two reference files
     await client.post(
         f"/api/v1/skills/{skill['id']}/files",
         json={"path": "ref/a.md", "content": "file a content"},
@@ -831,13 +798,11 @@ async def test_copy_is_independent_of_original(client):
     )
     assert copy_r.status_code == 201
     new_id = copy_r.json()["id"]
-    # Update the original
     await client.put(
         f"/api/v1/skills/{skill['id']}",
         json={"content": "updated content"},
         headers=HEADERS,
     )
-    # The copy should still have the original content
     copy_detail = await client.get(f"/api/v1/skills/{new_id}", headers=HEADERS)
     assert copy_detail.status_code == 200
     assert copy_detail.json()["content"] == "original content"
@@ -845,14 +810,12 @@ async def test_copy_is_independent_of_original(client):
 
 @pytest.mark.asyncio
 async def test_same_skill_name_allowed_in_different_teams(client):
-    # After removing global UNIQUE, same name can exist in multiple teams
     skill1 = await _create_skill_full(client, "shared-name-skill", scope="team", visibility="open")
     skill2 = await _create_skill_full(client, "shared-name-skill", scope="team", visibility="open")
     team1 = await _create_team(client, "Name Team 1")
     team2 = await _create_team(client, "Name Team 2")
     await _assign_skill_to_team(client, team1["id"], skill1["id"])
     await _assign_skill_to_team(client, team2["id"], skill2["id"])
-    # Both teams have a skill named "shared-name-skill" — this is valid
     detail1 = await client.get(f"/api/v1/teams/{team1['id']}", headers=HEADERS)
     detail2 = await client.get(f"/api/v1/teams/{team2['id']}", headers=HEADERS)
     assert "shared-name-skill" in detail1.json()["skills"]

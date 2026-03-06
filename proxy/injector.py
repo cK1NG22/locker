@@ -25,12 +25,11 @@ _LOCKER_READ_REF_TOOL = {
 async def _get_skill_files(skill_name: str) -> list[dict]:
     """Query reference files for a skill. Returns list of {path, size_bytes} dicts."""
     db = get_db()
-    cursor = await db.execute(
+    rows = await db.fetch(
         "SELECT sf.path, sf.size_bytes FROM skill_files sf "
-        "JOIN skills s ON s.id = sf.skill_id WHERE s.name = ?",
-        (skill_name,),
+        "JOIN skills s ON s.id = sf.skill_id WHERE s.name = $1",
+        skill_name,
     )
-    rows = await cursor.fetchall()
     return [{"path": r["path"], "size_bytes": r["size_bytes"]} for r in rows]
 
 
@@ -114,10 +113,9 @@ async def _inject_tokens(body: dict) -> tuple[dict, list[str], bool]:
             raise HTTPException(
                 status_code=422, detail=f"Token '{token_id}' is unknown or expired"
             )
-        cursor = await db.execute(
-            "SELECT content FROM skills WHERE name = ?", (skill_name,)
+        row = await db.fetchrow(
+            "SELECT content FROM skills WHERE name = $1", skill_name
         )
-        row = await cursor.fetchone()
         if row is None:
             raise HTTPException(
                 status_code=422, detail=f"Skill '{skill_name}' not found"
@@ -170,10 +168,9 @@ async def inject_skills(body: dict) -> tuple[dict, list[str], bool]:
         db = get_db()
         skill_blocks: list[str] = []
         for name in skill_names:
-            cursor = await db.execute(
-                "SELECT content FROM skills WHERE name = ?", (name,)
+            row = await db.fetchrow(
+                "SELECT content FROM skills WHERE name = $1", name
             )
-            row = await cursor.fetchone()
             if row is None:
                 raise HTTPException(status_code=422, detail=f"Skill '{name}' not found")
             decrypted = decrypt(row["content"])

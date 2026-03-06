@@ -1,24 +1,15 @@
-import base64
-import os
 from datetime import datetime, timezone
 from unittest.mock import patch
 
 import jwt as _jwt
 import pytest
 import pytest_asyncio
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from httpx import AsyncClient, ASGITransport
 
-TEST_JWT_SECRET = "test-jwt-secret-that-is-long-enough-for-hs256"
-TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
+from tests.conftest import TEST_JWT_SECRET
 
-os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
-os.environ["LOCKER_ENCRYPTION_KEY"] = TEST_ENC_KEY
-os.environ["LOCKER_DB_PATH"] = ":memory:"
-os.environ["GOOGLE_CLIENT_ID"] = "test-client-id.apps.googleusercontent.com"
-
-from main import app  # noqa: E402
-from vault.db import init_db, close_db  # noqa: E402
+from main import app
+from vault.db import init_db, close_db
 
 
 def _make_jwt(secret: str = TEST_JWT_SECRET, exp_year: int = 2099) -> str:

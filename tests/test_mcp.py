@@ -1,4 +1,3 @@
-import base64
 import json
 import os
 import pytest
@@ -6,32 +5,13 @@ import pytest_asyncio
 import respx
 import httpx
 from httpx import AsyncClient, ASGITransport
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from unittest.mock import patch
 
-# Set env vars before importing app
-from datetime import datetime, timezone
+from tests.conftest import TEST_JWT
 
-import jwt as _jwt
-
-TEST_JWT_SECRET = "test-jwt-secret-that-is-long-enough-for-hs256"
-TEST_ENC_KEY = base64.b64encode(AESGCM.generate_key(256)).decode()
-
-os.environ["LOCKER_JWT_SECRET"] = TEST_JWT_SECRET
-os.environ["LOCKER_ENCRYPTION_KEY"] = TEST_ENC_KEY
-os.environ["LOCKER_DB_PATH"] = ":memory:"
-os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
-
-_TEST_PAYLOAD = {
-    "sub": "test-user-id",
-    "email": "test@example.com",
-    "exp": datetime(2099, 1, 1, tzinfo=timezone.utc),
-}
-TEST_JWT = _jwt.encode(_TEST_PAYLOAD, TEST_JWT_SECRET, algorithm="HS256")
-
-from main import app  # noqa: E402
-from vault.db import init_db, close_db  # noqa: E402
-from locker_mcp import token_store  # noqa: E402
+from main import app
+from vault.db import init_db, close_db
+from locker_mcp import token_store
 
 FAKE_ANTHROPIC_RESPONSE = {
     "id": "msg_test",
@@ -94,7 +74,6 @@ def test_expired_token_returns_none():
     with patch("locker_mcp.token_store.time") as mock_time:
         mock_time.time.return_value = 1000.0
         token_store.register("tok-unit-3", "bullets")
-        # Advance past TTL
         mock_time.time.return_value = 1000.0 + token_store.TTL + 1
         assert token_store.consume("tok-unit-3") is None
 
@@ -102,7 +81,6 @@ def test_expired_token_returns_none():
 # --- /internal/register-token endpoint tests ---
 
 
-# Fixed UUID-format tokens for endpoint and proxy tests
 TOKEN_EP_1 = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
 TOKEN_EP_2 = "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
 TOKEN_PROXY_1 = "cccccccc-cccc-4ccc-cccc-cccccccccccc"
@@ -119,7 +97,6 @@ async def test_register_token_valid(client):
     )
     assert r.status_code == 200
     assert r.json() == {"ok": True}
-    # Token is now in the store
     assert token_store.consume(TOKEN_EP_1) == "bullets"
 
 
