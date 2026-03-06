@@ -1,5 +1,4 @@
 import json
-import pytest
 
 from proxy.filter import filter_response
 

@@ -751,7 +751,7 @@ async def test_copy_without_can_share_in_target_team_rejected(client):
 @pytest.mark.asyncio
 async def test_copy_duplicate_name_in_target_team_rejected(client):
     skill = await _create_skill_full(client, "dup-name-skill", scope="team", visibility="open")
-    existing = await _create_skill_full(client, "dup-name-skill-copy", scope="team", visibility="open")
+    await _create_skill_full(client, "dup-name-skill-copy", scope="team", visibility="open")
     source_team = await _create_team(client, "Dup Source Team")
     target_team = await _create_team(client, "Dup Target Team")
     await _assign_skill_to_team(client, source_team["id"], skill["id"])

@@ -1,33 +1,32 @@
-# Worktree Task: 4.3 — Self-serve team creation + onboarding wizard
+# Worktree Task: 4.2 — CI/CD pipeline (GitHub Actions)
 
 ## Task ID
-4.3
+4.2
 
 ## Branch
-`dung/4.3-self-serve-team-creation`
+`dung/4.2-cicd-pipeline`
 
 ## Description
-Add a "Create Team" flow to the dashboard so any logged-in user can create a team, get a token, and see setup instructions — all without CLI or API calls. Include a "Getting Started" wizard: create team -> upload first skill -> invite first member.
+Add a GitHub Actions workflow that runs `pytest` on every push/PR against a Postgres service container. Include `ruff` for linting. Build the Docker image in CI to catch Dockerfile breakage.
 
 ## Files to Create/Modify
-- `dashboard/src/` (new pages/components)
+- New `.github/workflows/ci.yml`
+- `pyproject.toml` (dev deps)
 
 ## Dependencies (all complete)
-- None
+- 4.1: PostgreSQL migration — DONE (asyncpg, testcontainers, Alembic)
 
 ## Downstream Tasks (blocked by this task)
-- 4.7: Dashboard analytics page
+- 4.9: Production deployment (also needs this task complete)
 
 ## Key Context
-- Dashboard is React + Tailwind (`dashboard/` directory)
-- Team creation API already exists: `POST /api/v1/teams`
-- Auth uses Google OAuth with JWT tokens
-- Admin routes require `Authorization: Bearer <jwt>`
-- Teams have tokens for employee access (X-Team-Token header)
-- Existing team management UI in `dashboard/src/components/teams/`
+- Tests use `testcontainers[postgres]` — CI needs Docker-in-Docker or a Postgres service container
+- 171 tests currently passing
+- DB is PostgreSQL via asyncpg (`vault/db.py`)
+- `pyproject.toml` has all deps; tests run with `pytest`
+- Dockerfile exists at project root
 
 ## Project References
 - Project CLAUDE.md: `../../CLAUDE.md` (from project root)
 - Roadmap: `docs/ROADMAP.md`
-- Dashboard: `dashboard/` directory
-- Team routes: `vault/team_routes.py`
+- Test suite: `tests/` directory (9 test files + conftest.py)

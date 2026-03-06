@@ -1,12 +1,8 @@
-from datetime import datetime, timezone
-
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
-from tests.conftest import TEST_JWT, TEST_JWT_SECRET, OTHER_JWT
-
-import jwt as _jwt
+from tests.conftest import TEST_JWT, OTHER_JWT
 
 from main import app
 from vault.db import init_db, close_db

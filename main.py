@@ -24,7 +24,6 @@ from proxy.routes import router as proxy_router
 from locker_mcp.routes import router as mcp_router
 from locker_mcp.sse_server import mcp_routes
 
-from starlette.routing import Route, Mount
 
 
 @asynccontextmanager
