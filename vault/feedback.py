@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from src.auth import require_user
+from vault.audit import audit
 from vault.db import get_db
 
 
@@ -100,8 +101,8 @@ async def get_feedback(status: Optional[str] = Query(None)):
     }
 
 
-@router.patch("/feedback/{feedback_id}", dependencies=[Depends(require_user)])
-async def update_feedback_status(feedback_id: str, body: StatusBody):
+@router.patch("/feedback/{feedback_id}")
+async def update_feedback_status(feedback_id: str, body: StatusBody, user: dict = Depends(require_user)):
     if body.status not in ("reviewed", "applied"):
         raise HTTPException(status_code=400, detail="Status must be 'reviewed' or 'applied'")
     db = get_db()
@@ -114,6 +115,7 @@ async def update_feedback_status(feedback_id: str, body: StatusBody):
         "UPDATE skill_feedback SET status = $1 WHERE id = $2",
         body.status, feedback_id,
     )
+    await audit(db, user["sub"], "feedback.update_status", "feedback", feedback_id, {"status": body.status})
     r = await db.fetchrow(
         "SELECT id, skill_id, team_id, feedback_text, status, created_at "
         "FROM skill_feedback WHERE id = $1",

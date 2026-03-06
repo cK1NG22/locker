@@ -107,10 +107,20 @@ CREATE TABLE IF NOT EXISTS skill_feedback (
     status      TEXT NOT NULL DEFAULT 'pending',
     created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id              TEXT PRIMARY KEY,
+    actor_id        TEXT NOT NULL,
+    action          TEXT NOT NULL,
+    resource_type   TEXT NOT NULL,
+    resource_id     TEXT,
+    metadata        JSONB,
+    created_at      TEXT NOT NULL
+);
 """
 
 _TABLES = [
-    "skill_feedback", "skill_usage", "skill_files",
+    "audit_logs", "skill_feedback", "skill_usage", "skill_files",
     "team_skills", "team_members", "teams", "skills", "users",
 ]
 
