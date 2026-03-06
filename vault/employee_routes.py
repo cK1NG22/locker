@@ -1,6 +1,8 @@
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
+
+from src.middleware.rate_limit import limiter
 
 from vault.crypto import decrypt
 from vault.db import get_db
@@ -24,7 +26,9 @@ async def _require_team_token(
 
 
 @router.get("/employee/skills")
+@limiter.limit("60/minute")
 async def get_employee_skills(
+    request: Request,
     x_team_token: Optional[str] = Header(None, alias="X-Team-Token"),
 ):
     team = await _require_team_token(x_team_token)

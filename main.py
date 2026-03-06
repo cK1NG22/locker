@@ -7,6 +7,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+from src.middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from vault.db import init_db, close_db
 from src.auth.oauth import router as auth_router
 from vault.routes import router as vault_router
@@ -29,9 +34,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Locker", lifespan=lifespan, routes=mcp_routes)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 
 @app.get("/health")
+@limiter.exempt
 async def health():
     return {"status": "ok", "phase": 3}
 
@@ -39,6 +48,7 @@ async def health():
 UUID_RE = re.compile(r'^[0-9a-f\-]{36}$')
 
 @app.get("/setup/{team_token}", response_class=PlainTextResponse)
+@limiter.exempt
 async def setup_script(team_token: str, request: Request):
     if not UUID_RE.match(team_token):
         return PlainTextResponse("Invalid token format.", status_code=400)
