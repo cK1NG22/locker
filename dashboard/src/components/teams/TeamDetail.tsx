@@ -1,19 +1,24 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useTeams, type TeamDetail as TeamDetailType, type TeamMember } from "../../hooks/useTeams";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useTeams, type TeamDetail as TeamDetailType, type TeamMember, type TeamCreated } from "../../hooks/useTeams";
 import { useSkills, type SkillMeta } from "../../hooks/useSkills";
 
 export default function TeamDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember, removeMember } = useTeams();
+  const location = useLocation();
+  const { getTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember, removeMember, rotateToken } = useTeams();
   const { skills: allSkills } = useSkills();
 
   const [team, setTeam] = useState<TeamDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [inviteCopied, setInviteCopied] = useState(false);
+  const [showTokenModal, setShowTokenModal] = useState<TeamCreated | null>(
+    (location.state as { newToken?: TeamCreated })?.newToken ?? null
+  );
+  const [tokenCopied, setTokenCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [rotating, setRotating] = useState(false);
 
   // Inline rename
   const [editingName, setEditingName] = useState(false);
@@ -55,11 +60,18 @@ export default function TeamDetail() {
     }
   }, [loadTeam, allSkills.length, loading]);
 
-  const copyToken = async () => {
-    if (!team) return;
-    await navigator.clipboard.writeText(team.token);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  const handleRotateToken = async () => {
+    if (!id || !confirm("Rotate this team's token? The old token will stop working immediately.")) return;
+    setRotating(true);
+    try {
+      const result = await rotateToken(id);
+      setShowTokenModal(result);
+      await loadTeam();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Rotate failed");
+    } finally {
+      setRotating(false);
+    }
   };
 
   const saveName = async () => {
@@ -198,45 +210,74 @@ export default function TeamDetail() {
       <div className="mb-6">
         <label className="text-xs text-gray-400 uppercase tracking-wide">Team Token</label>
         <div className="mt-1 flex items-center gap-2">
-          <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono text-gray-700 select-all">
-            {team.token}
+          <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono text-gray-700">
+            {team.token_prefix}...
           </code>
           <button
-            onClick={copyToken}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+            onClick={handleRotateToken}
+            disabled={rotating}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
           >
-            {copied ? "Copied!" : "Copy"}
+            {rotating ? "Rotating..." : "Rotate Token"}
           </button>
         </div>
         <p className="text-xs text-gray-400 mt-1">
-          Share this token with team members for the Companion page.
+          The full token is only shown once when created or rotated.
         </p>
       </div>
 
-      {/* Invite Member */}
-      <div className="mb-6">
-        <label className="text-xs text-gray-400 uppercase tracking-wide">Companion Page Link</label>
-        <p className="text-xs text-gray-500 mt-1 mb-2">
-          Share this link with employees. It opens the Companion page with the team token pre-filled.
-        </p>
-        <div className="mt-1 flex items-center gap-2">
-          <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono text-gray-700 select-all truncate">
-            {window.location.origin}/companion?join={team.token}
-          </code>
-          <button
-            onClick={async () => {
-              await navigator.clipboard.writeText(
-                `${window.location.origin}/companion?join=${team.token}`
-              );
-              setInviteCopied(true);
-              setTimeout(() => setInviteCopied(false), 1500);
-            }}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
-          >
-            {inviteCopied ? "Copied!" : "Copy Link"}
-          </button>
+      {/* Token modal (shown once after create or rotate) */}
+      {showTokenModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">New Team Token</h3>
+            <p className="text-sm text-red-600 mb-4">Save this token now — it won't be shown again.</p>
+
+            <label className="text-xs text-gray-400 uppercase tracking-wide">Token</label>
+            <div className="mt-1 mb-4 flex items-center gap-2">
+              <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono text-gray-700 select-all break-all">
+                {showTokenModal.token}
+              </code>
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(showTokenModal.token);
+                  setTokenCopied(true);
+                  setTimeout(() => setTokenCopied(false), 1500);
+                }}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                {tokenCopied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+
+            <label className="text-xs text-gray-400 uppercase tracking-wide">Companion Link</label>
+            <div className="mt-1 mb-4 flex items-center gap-2">
+              <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono text-gray-700 select-all truncate">
+                {window.location.origin}/companion?join={showTokenModal.token}
+              </code>
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(
+                    `${window.location.origin}/companion?join=${showTokenModal.token}`
+                  );
+                  setLinkCopied(true);
+                  setTimeout(() => setLinkCopied(false), 1500);
+                }}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                {linkCopied ? "Copied!" : "Copy Link"}
+              </button>
+            </div>
+
+            <button
+              onClick={() => { setShowTokenModal(null); setTokenCopied(false); setLinkCopied(false); }}
+              className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Done
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Skill assignment */}
       <div className="mb-6">

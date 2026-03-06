@@ -20,11 +20,20 @@ export interface TeamMember {
 export interface TeamDetail {
   id: string;
   name: string;
-  token: string;
+  token_prefix: string;
   owner_id: string | null;
   created_at: string;
   skills: string[];
   members: TeamMember[];
+}
+
+export interface TeamCreated {
+  id: string;
+  name: string;
+  token: string;
+  token_prefix: string;
+  owner_id: string | null;
+  created_at: string;
 }
 
 export function useTeams() {
@@ -54,11 +63,18 @@ export function useTeams() {
 
   const createTeam = useCallback(
     async (name: string) => {
-      const result = await api.post<{ id: string; token: string }>("/api/v1/teams", { name });
+      const result = await api.post<TeamCreated>("/api/v1/teams", { name });
       await refresh();
       return result;
     },
     [refresh],
+  );
+
+  const rotateToken = useCallback(
+    async (teamId: string) => {
+      return api.post<TeamCreated>(`/api/v1/teams/${teamId}/rotate-token`, {});
+    },
+    [],
   );
 
   const updateTeam = useCallback(
@@ -105,5 +121,5 @@ export function useTeams() {
     [],
   );
 
-  return { teams, loading, error, refresh, getTeam, createTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember, removeMember };
+  return { teams, loading, error, refresh, getTeam, createTeam, rotateToken, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember, removeMember };
 }

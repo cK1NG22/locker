@@ -11,6 +11,7 @@ from src.middleware.rate_limit import limiter
 
 from src.auth import require_user
 from vault.db import get_db
+from vault.token_utils import hash_token
 
 
 class FeedbackBody(BaseModel):
@@ -27,8 +28,9 @@ async def _require_team_token(
     if not x_team_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
     db = get_db()
+    hashed = hash_token(x_team_token)
     row = await db.fetchrow(
-        "SELECT id, name FROM teams WHERE token = $1", x_team_token
+        "SELECT id, name FROM teams WHERE token_hash = $1", hashed
     )
     if row is None:
         raise HTTPException(status_code=401, detail="Unauthorized")

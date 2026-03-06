@@ -159,6 +159,23 @@ async def test_visibility_shared_skill_no_content(client):
 
 
 @pytest.mark.asyncio
+async def test_employee_auth_after_rotation(client):
+    """Old token should fail, new token should work after rotation."""
+    team = await client.post("/api/v1/teams", json={"name": "Rotate Emp Team"}, headers=ADMIN)
+    old_token = team.json()["token"]
+    team_id = team.json()["id"]
+    # Rotate
+    rot = await client.post(f"/api/v1/teams/{team_id}/rotate-token", headers=ADMIN)
+    new_token = rot.json()["token"]
+    # Old token fails
+    r1 = await client.get("/api/v1/employee/skills", headers={"X-Team-Token": old_token})
+    assert r1.status_code == 401
+    # New token works
+    r2 = await client.get("/api/v1/employee/skills", headers={"X-Team-Token": new_token})
+    assert r2.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_visibility_open_skill_has_content(client):
     skill = await client.post(
         "/api/v1/skills",

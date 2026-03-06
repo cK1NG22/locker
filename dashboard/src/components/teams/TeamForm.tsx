@@ -18,7 +18,7 @@ export default function TeamForm() {
     setError(null);
     try {
       const result = await createTeam(name.trim());
-      navigate(`/teams/${result.id}`);
+      navigate(`/teams/${result.id}`, { state: { newToken: result } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create failed");
     } finally {

@@ -58,11 +58,12 @@ CREATE TABLE IF NOT EXISTS skills (
 );
 
 CREATE TABLE IF NOT EXISTS teams (
-    id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL UNIQUE,
-    token       TEXT NOT NULL UNIQUE,
-    owner_id    TEXT,
-    created_at  TEXT NOT NULL
+    id           TEXT PRIMARY KEY,
+    name         TEXT NOT NULL UNIQUE,
+    token_hash   TEXT NOT NULL UNIQUE,
+    token_prefix TEXT NOT NULL,
+    owner_id     TEXT,
+    created_at   TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS team_members (

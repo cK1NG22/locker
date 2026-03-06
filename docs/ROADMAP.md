@@ -159,7 +159,7 @@ Two supported use cases, both possible within the same team:
   Files: `dashboard/src/` (new pages/components)
   `blocked-by: none`
 
-- [ ] **4.4: Hashed team tokens + rotation**
+- [x] **4.4: Hashed team tokens + rotation**
   Hash team tokens at rest (SHA-256 + salt). Store a `token_prefix` (first 8 chars) for display in the dashboard. Add `POST /api/v1/teams/{id}/rotate-token` endpoint. Full token shown exactly once on creation/rotation.
   Files: `vault/db.py` (migration), `vault/team_routes.py`, `vault/employee_routes.py`, `locker_mcp/sse_server.py`
   `blocked-by: 4.1`
