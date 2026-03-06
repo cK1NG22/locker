@@ -33,7 +33,7 @@ app = FastAPI(title="Locker", lifespan=lifespan, routes=mcp_routes)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "phase": 3}
 
 
 UUID_RE = re.compile(r'^[0-9a-f\-]{36}$')
