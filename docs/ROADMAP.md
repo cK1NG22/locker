@@ -154,7 +154,7 @@ Two supported use cases, both possible within the same team:
   Files: new `.github/workflows/ci.yml`, `pyproject.toml` (dev deps)
   `blocked-by: 4.1`
 
-- [ ] **4.3: Self-serve team creation + onboarding wizard**
+- [x] **4.3: Self-serve team creation + onboarding wizard**
   Add a "Create Team" flow to the dashboard so any logged-in user can create a team, get a token, and see setup instructions — all without CLI or API calls. Include a "Getting Started" wizard: create team -> upload first skill -> invite first member.
   Files: `dashboard/src/` (new pages/components)
   `blocked-by: none`

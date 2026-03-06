@@ -1,35 +1,33 @@
-# Worktree Task: 4.5 — Rate limiting
+# Worktree Task: 4.3 — Self-serve team creation + onboarding wizard
 
 ## Task ID
-4.5
+4.3
 
 ## Branch
-`dung/4.5-rate-limiting`
+`dung/4.3-self-serve-team-creation`
 
 ## Description
-Add per-IP and per-token rate limiting via `slowapi` middleware. Key limits: employee endpoints (60 req/min per token), admin endpoints (120 req/min per user), auth endpoint (10 req/min per IP). Log rate-limit hits.
+Add a "Create Team" flow to the dashboard so any logged-in user can create a team, get a token, and see setup instructions — all without CLI or API calls. Include a "Getting Started" wizard: create team -> upload first skill -> invite first member.
 
 ## Files to Create/Modify
-- `main.py`
-- `pyproject.toml`
-- New `src/middleware/rate_limit.py`
+- `dashboard/src/` (new pages/components)
 
 ## Dependencies (all complete)
 - None
 
 ## Downstream Tasks (blocked by this task)
-- None directly
+- 4.7: Dashboard analytics page
 
 ## Key Context
-- FastAPI app defined in `main.py`
-- Admin routes use `Authorization: Bearer <jwt>` (JWT contains user sub)
-- Employee routes use `X-Team-Token` header
-- Auth endpoint: `POST /auth/google` in `src/auth/oauth.py`
-- Proxy endpoint: `/proxy/anthropic/v1/messages`
-- `slowapi` is a popular FastAPI rate-limiting library built on `limits`
+- Dashboard is React + Tailwind (`dashboard/` directory)
+- Team creation API already exists: `POST /api/v1/teams`
+- Auth uses Google OAuth with JWT tokens
+- Admin routes require `Authorization: Bearer <jwt>`
+- Teams have tokens for employee access (X-Team-Token header)
+- Existing team management UI in `dashboard/src/components/teams/`
 
 ## Project References
 - Project CLAUDE.md: `../../CLAUDE.md` (from project root)
 - Roadmap: `docs/ROADMAP.md`
-- Main app: `main.py`
-- Auth routes: `src/auth/oauth.py`
+- Dashboard: `dashboard/` directory
+- Team routes: `vault/team_routes.py`
