@@ -5,7 +5,7 @@ Enterprise middleware that injects encrypted proprietary skills into LLM calls, 
 
 ## Repo map
 - `proxy/` — FastAPI proxy server; intercepts requests, injects skills, filters responses
-- `vault/` — Encrypted skill storage (SQLite → Postgres); admin-only access
+- `vault/` — Encrypted skill storage (Postgres); admin-only access
 - `src/auth/` — Admin auth and role-based access control
 - `cli/` — `locker deploy` CLI; pushes skill files into the vault (see ADR-0003)
 - `dashboard/` — React + Tailwind admin UI for skill CRUD and team management
@@ -22,6 +22,7 @@ Enterprise middleware that injects encrypted proprietary skills into LLM calls, 
 ## TODOs
 - [ ] Create `src/auth/CLAUDE.md` stub (blocked by hook — needs user confirmation)
 - [ ] Phase 3: Plan business-user feedback loop for skills (read-only users who want to suggest refinements to skills they can't edit — design UX and data model)
+- [ ] Set up PostHog (product analytics)
 
 ## Sharp edges (create nested CLAUDE.md before editing these)
 - `src/auth/` — breaks admin access if misconfigured

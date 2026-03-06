@@ -164,12 +164,12 @@ Two supported use cases, both possible within the same team:
   Files: `vault/db.py` (migration), `vault/team_routes.py`, `vault/employee_routes.py`, `locker_mcp/sse_server.py`
   `blocked-by: 4.1`
 
-- [ ] **4.5: Rate limiting**
+- [x] **4.5: Rate limiting**
   Add per-IP and per-token rate limiting via `slowapi` middleware. Key limits: employee endpoints (60 req/min per token), admin endpoints (120 req/min per user), auth endpoint (10 req/min per IP). Log rate-limit hits.
   Files: `main.py`, `pyproject.toml`, new `src/middleware/rate_limit.py`
   `blocked-by: none`
 
-- [ ] **4.6: Audit logging**
+- [x] **4.6: Audit logging**
   New `audit_log` table tracking: skill CRUD, team CRUD, member changes, token rotations, logins. Columns: `id, actor_id, action, resource_type, resource_id, metadata (JSON), created_at`. Admin endpoint `GET /api/v1/audit-log` with filters. Lightweight helper function so route files just call `await audit(...)`.
   Files: `vault/db.py`, new `vault/audit.py`, touch route files for audit calls, `main.py`
   `blocked-by: 4.1`
