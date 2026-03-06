@@ -5,6 +5,7 @@ from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.auth import require_user
+from vault.audit import audit
 from vault.db import get_db
 from vault.models import (
     TeamCreate,
@@ -87,6 +88,7 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
                 "INSERT INTO team_members (id, team_id, user_id, role, can_share, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
                 member_id, team_id, user_id, "admin", True, now,
             )
+    await audit(db, user["sub"], "team.create", "team", team_id, {"name": body.name})
     return TeamCreated(id=team_id, name=body.name, token=plaintext, token_prefix=token_prefix, owner_id=user_id, created_at=now)
 
 
@@ -161,6 +163,7 @@ async def update_team(team_id: str, body: TeamUpdate, user: dict = Depends(requi
         )
     except UniqueViolationError:
         raise HTTPException(status_code=409, detail=f"Team '{body.name}' already exists")
+    await audit(db, user["sub"], "team.update", "team", team_id, {"name": body.name})
     return TeamOut(
         id=row["id"], name=body.name, token_prefix=row["token_prefix"], owner_id=row["owner_id"], created_at=row["created_at"]
     )
@@ -171,6 +174,7 @@ async def delete_team(team_id: str, user: dict = Depends(require_user)):
     await _require_team_admin(team_id, user["sub"])
     db = get_db()
     await db.execute("DELETE FROM teams WHERE id = $1", team_id)
+    await audit(db, user["sub"], "team.delete", "team", team_id)
 
 
 @router.post("/teams/{team_id}/rotate-token", response_model=TeamCreated)
@@ -214,6 +218,7 @@ async def set_team_skills(team_id: str, body: TeamSkillsSet, user: dict = Depend
                     "INSERT INTO team_skills (team_id, skill_id) VALUES ($1, $2)",
                     team_id, sid,
                 )
+    await audit(db, user["sub"], "team.assign_skills", "team", team_id, {"skill_ids": body.skill_ids})
     return {"ok": True}
 
 
@@ -239,6 +244,7 @@ async def add_member(team_id: str, body: TeamMemberAdd, user: dict = Depends(req
         "INSERT INTO team_members (id, team_id, user_id, role, can_share, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
         member_id, team_id, target_user_id, "member", False, now,
     )
+    await audit(db, user["sub"], "member.add", "member", member_id, {"team_id": team_id, "email": body.email, "role": "member"})
     return TeamMemberOut(
         id=member_id,
         user_id=target_user_id,
@@ -280,6 +286,7 @@ async def update_member(
         "UPDATE team_members SET role = $1, can_share = $2 WHERE id = $3",
         new_role, new_can_share, member_id,
     )
+    await audit(db, user["sub"], "member.update", "member", member_id, {"team_id": team_id, "role": new_role, "can_share": bool(new_can_share)})
     return TeamMemberOut(
         id=row["id"],
         user_id=row["user_id"],
@@ -314,6 +321,7 @@ async def remove_member(team_id: str, member_id: str, user: dict = Depends(requi
         if count_row["cnt"] <= 1:
             raise HTTPException(status_code=400, detail="Cannot remove the last team admin")
     await db.execute("DELETE FROM team_members WHERE id = $1 AND team_id = $2", member_id, team_id)
+    await audit(db, user["sub"], "member.remove", "member", member_id, {"team_id": team_id})
 
 
 @router.post("/skills/{skill_id}/copy-to-team/{target_team_id}", status_code=201, response_model=SkillCopied)
@@ -394,4 +402,5 @@ async def copy_skill_to_team(skill_id: str, target_team_id: str, user: dict = De
                 target_team_id, new_skill_id,
             )
 
+    await audit(db, user["sub"], "skill.copy_to_team", "skill", new_skill_id, {"source_skill_id": skill_id, "target_team_id": target_team_id})
     return SkillCopied(id=new_skill_id, name=skill["name"], target_team_id=target_team_id, created_at=now)

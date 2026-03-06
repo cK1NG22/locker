@@ -9,6 +9,7 @@ from google.auth.transport import requests as google_requests
 
 from src.middleware.rate_limit import limiter
 from vault.db import get_db
+from vault.audit import audit
 from src.auth.jwt import create_token
 
 router = APIRouter(prefix="/api/v1/auth")
@@ -44,6 +45,7 @@ async def google_login(request: Request, body: GoogleTokenRequest):
         "SELECT id FROM users WHERE google_id = $1", google_id
     )
 
+    is_new = row is None
     if row:
         user_id = row["id"]
         await db.execute(
@@ -57,6 +59,7 @@ async def google_login(request: Request, body: GoogleTokenRequest):
         )
 
     access_token = create_token(user_id, email)
+    await audit(db, user_id, "auth.login", "user", user_id, {"email": email, "is_new_user": is_new})
     return {
         "access_token": access_token,
         "user": {"id": user_id, "email": email, "name": name},

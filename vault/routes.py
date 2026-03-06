@@ -7,6 +7,7 @@ from typing import Optional
 
 from src.auth import require_user
 from vault.db import get_db
+from vault.audit import audit
 from vault.crypto import encrypt, decrypt
 from vault.models import (
     SkillCreate,
@@ -48,6 +49,7 @@ async def create_skill(body: SkillCreate, user: dict = Depends(require_user)):
         "INSERT INTO skills (id, name, content, description, visibility, scope, uploaded_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
         skill_id, body.name, encrypted, body.description, body.visibility, body.scope, uploaded_by, now, now,
     )
+    await audit(db, user["sub"], "skill.create", "skill", skill_id, {"name": body.name, "scope": body.scope, "visibility": body.visibility})
     return SkillCreated(id=skill_id, name=body.name, visibility=body.visibility, scope=body.scope, created_at=now)
 
 
@@ -192,6 +194,13 @@ async def update_skill(skill_id: str, body: SkillUpdate, user: dict = Depends(re
         "UPDATE skills SET name = $1, content = $2, description = $3, visibility = $4, scope = $5, updated_at = $6 WHERE id = $7",
         new_name, new_content, new_description, new_visibility, new_scope, now, skill_id,
     )
+    changed = {}
+    if body.name is not None: changed["name"] = body.name
+    if body.content is not None: changed["content"] = True
+    if body.description is not None: changed["description"] = body.description
+    if body.visibility is not None: changed["visibility"] = body.visibility
+    if body.scope is not None: changed["scope"] = body.scope
+    await audit(db, user["sub"], "skill.update", "skill", skill_id, changed)
     return SkillUpdated(id=skill_id, name=new_name, visibility=new_visibility, scope=new_scope, updated_at=now)
 
 
@@ -199,12 +208,13 @@ async def update_skill(skill_id: str, body: SkillUpdate, user: dict = Depends(re
 async def delete_skill(skill_id: str, user: dict = Depends(require_user)):
     db = get_db()
     user_id = user["sub"]
-    row = await db.fetchrow("SELECT id, scope, uploaded_by FROM skills WHERE id = $1", skill_id)
+    row = await db.fetchrow("SELECT id, name, scope, uploaded_by FROM skills WHERE id = $1", skill_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Skill not found")
     if row["scope"] == "personal" and row["uploaded_by"] != user_id:
         raise HTTPException(status_code=403, detail="Only the owner can delete a personal skill")
     await db.execute("DELETE FROM skills WHERE id = $1", skill_id)
+    await audit(db, user["sub"], "skill.delete", "skill", skill_id, {"name": row["name"]})
 
 
 # --- Skill file endpoints ---
@@ -254,7 +264,7 @@ async def get_skill_file(skill_id: str, file_id: str):
 
 
 @router.post("/skills/{skill_id}/files", status_code=201, response_model=SkillFileMeta)
-async def upload_skill_file(skill_id: str, body: SkillFileCreate):
+async def upload_skill_file(skill_id: str, body: SkillFileCreate, user: dict = Depends(require_user)):
     await _require_skill(skill_id)
     file_id = str(uuid.uuid4())
     now = _now()
@@ -268,20 +278,22 @@ async def upload_skill_file(skill_id: str, body: SkillFileCreate):
         )
     except UniqueViolationError:
         raise HTTPException(status_code=409, detail=f"File path '{body.path}' already exists for this skill")
+    await audit(db, user["sub"], "skill_file.upload", "skill_file", file_id, {"skill_id": skill_id, "path": body.path})
     return SkillFileMeta(id=file_id, path=body.path, size_bytes=size_bytes, created_at=now)
 
 
 @router.delete("/skills/{skill_id}/files/{file_id}", status_code=204)
-async def delete_skill_file(skill_id: str, file_id: str):
+async def delete_skill_file(skill_id: str, file_id: str, user: dict = Depends(require_user)):
     await _require_skill(skill_id)
     db = get_db()
     row = await db.fetchrow(
-        "SELECT id FROM skill_files WHERE id = $1 AND skill_id = $2",
+        "SELECT id, path FROM skill_files WHERE id = $1 AND skill_id = $2",
         file_id, skill_id,
     )
     if row is None:
         raise HTTPException(status_code=404, detail="File not found")
     await db.execute("DELETE FROM skill_files WHERE id = $1", file_id)
+    await audit(db, user["sub"], "skill_file.delete", "skill_file", file_id, {"skill_id": skill_id, "path": row["path"]})
 
 
 @router.post("/skills/deploy-folder", status_code=201)
@@ -315,4 +327,5 @@ async def deploy_folder(body: SkillFolderDeploy, user: dict = Depends(require_us
                     "INSERT INTO skill_files (id, skill_id, path, content, size_bytes, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
                     file_id, skill_id, f.path, encrypted_file, size_bytes, now,
                 )
+    await audit(db, user["sub"], "skill.deploy", "skill", skill_id, {"name": body.name, "file_count": len(body.files)})
     return {"id": skill_id, "name": body.name, "scope": body.scope, "file_count": len(body.files), "created_at": now}
