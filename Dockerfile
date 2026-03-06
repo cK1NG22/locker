@@ -21,10 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq5 && rm -r
 WORKDIR /app
 
 COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
-
-ARG CACHE_BUST=phase3
 COPY . .
+RUN pip install --no-cache-dir .
 COPY --from=companion-build /static/companion ./static/companion
 COPY --from=dashboard-build /static/dashboard ./static/dashboard
 
