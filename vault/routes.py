@@ -195,11 +195,16 @@ async def update_skill(skill_id: str, body: SkillUpdate, user: dict = Depends(re
         new_name, new_content, new_description, new_visibility, new_scope, now, skill_id,
     )
     changed = {}
-    if body.name is not None: changed["name"] = body.name
-    if body.content is not None: changed["content"] = True
-    if body.description is not None: changed["description"] = body.description
-    if body.visibility is not None: changed["visibility"] = body.visibility
-    if body.scope is not None: changed["scope"] = body.scope
+    if body.name is not None:
+        changed["name"] = body.name
+    if body.content is not None:
+        changed["content"] = True
+    if body.description is not None:
+        changed["description"] = body.description
+    if body.visibility is not None:
+        changed["visibility"] = body.visibility
+    if body.scope is not None:
+        changed["scope"] = body.scope
     await audit(db, user["sub"], "skill.update", "skill", skill_id, changed)
     return SkillUpdated(id=skill_id, name=new_name, visibility=new_visibility, scope=new_scope, updated_at=now)
 

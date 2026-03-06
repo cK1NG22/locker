@@ -46,7 +46,7 @@ def _build_skill_block(skill_name: str, decrypted: str, files: list[dict]) -> st
             lines.append(f"- {f['path']} ({f['size_bytes']:,} bytes)")
         lines.append("[/AVAILABLE REFERENCES]")
         block += "\n".join(lines)
-    block += f"\n[/SKILL]"
+    block += "\n[/SKILL]"
     return block
 
 

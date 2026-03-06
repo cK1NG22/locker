@@ -1,9 +1,9 @@
 import os
-import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
 
-_SECRET_KEY = lambda: os.environ.get("LOCKER_JWT_SECRET", "dev-secret-change-me")
+def _SECRET_KEY():
+    return os.environ.get("LOCKER_JWT_SECRET", "dev-secret-change-me")
 _ALGORITHM = "HS256"
 _EXPIRY_HOURS = 24
 

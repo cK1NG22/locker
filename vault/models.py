@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from typing import Literal, Optional, List
 
 Visibility = Literal["hidden", "shared", "open"]

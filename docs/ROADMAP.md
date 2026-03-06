@@ -149,7 +149,7 @@ Two supported use cases, both possible within the same team:
   Files: `vault/db.py`, `pyproject.toml`, new `alembic/` dir, `Dockerfile`, `.env.example`, all test files (fixture update)
   `blocked-by: none`
 
-- [ ] **4.2: CI/CD pipeline (GitHub Actions)**
+- [x] **4.2: CI/CD pipeline (GitHub Actions)**
   Add a GitHub Actions workflow that runs `pytest` on every push/PR against a Postgres service container. Include `ruff` for linting. Build the Docker image in CI to catch Dockerfile breakage.
   Files: new `.github/workflows/ci.yml`, `pyproject.toml` (dev deps)
   `blocked-by: 4.1`

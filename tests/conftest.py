@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 import asyncpg
 import jwt as _jwt
 import pytest
-import pytest_asyncio
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from testcontainers.postgres import PostgresContainer
 
