@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FeedbackItem } from "../../hooks/useFeedback";
+import { copyToClipboard } from "../../lib/clipboard";
 
 interface FeedbackCardProps {
   item: FeedbackItem;
@@ -16,11 +17,9 @@ export default function FeedbackCard({ item, onUpdateStatus }: FeedbackCardProps
   const [copied, setCopied] = useState(false);
   const [updating, setUpdating] = useState(false);
 
-  const copyText = async () => {
+  const copyText = () => {
     const text = `Skill: ${item.skill_name || "Unknown"}\n\n${item.feedback_text}`;
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    copyToClipboard(text, setCopied);
   };
 
   const handleStatus = async (status: "reviewed" | "applied") => {

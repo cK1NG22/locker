@@ -1,4 +1,6 @@
-const TOKEN_STORAGE = "locker_auth_token";
+import { STORAGE_KEYS } from "./constants";
+
+const TOKEN_STORAGE = STORAGE_KEYS.AUTH_TOKEN;
 
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_STORAGE);
@@ -33,7 +35,7 @@ async function request<T>(
 
   if (res.status === 401) {
     clearStoredToken();
-    localStorage.setItem("locker_session_expired", "1");
+    localStorage.setItem(STORAGE_KEYS.SESSION_EXPIRED, "1");
     throw new Error("Unauthorized");
   }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../context/AuthContext";
+import { STORAGE_KEYS } from "../lib/constants";
 
 export default function Login() {
   const { loginWithGoogle } = useAuth();
@@ -8,9 +9,9 @@ export default function Login() {
   const [sessionExpired, setSessionExpired] = useState(false);
 
   useEffect(() => {
-    if (localStorage.getItem("locker_session_expired") === "1") {
+    if (localStorage.getItem(STORAGE_KEYS.SESSION_EXPIRED) === "1") {
       setSessionExpired(true);
-      localStorage.removeItem("locker_session_expired");
+      localStorage.removeItem(STORAGE_KEYS.SESSION_EXPIRED);
     }
   }, []);
 

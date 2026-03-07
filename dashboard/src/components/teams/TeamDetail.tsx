@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTeams, type TeamDetail as TeamDetailType, type TeamMember, type TeamCreated } from "../../hooks/useTeams";
 import { useSkills, type SkillMeta } from "../../hooks/useSkills";
+import { copyToClipboard } from "../../lib/clipboard";
 
 export default function TeamDetail() {
   const { id } = useParams<{ id: string }>();
@@ -239,11 +240,7 @@ export default function TeamDetail() {
                 {showTokenModal.token}
               </code>
               <button
-                onClick={async () => {
-                  await navigator.clipboard.writeText(showTokenModal.token);
-                  setTokenCopied(true);
-                  setTimeout(() => setTokenCopied(false), 1500);
-                }}
+                onClick={() => copyToClipboard(showTokenModal.token, setTokenCopied)}
                 className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
               >
                 {tokenCopied ? "Copied!" : "Copy"}
@@ -256,13 +253,10 @@ export default function TeamDetail() {
                 {window.location.origin}/companion?join={showTokenModal.token}
               </code>
               <button
-                onClick={async () => {
-                  await navigator.clipboard.writeText(
-                    `${window.location.origin}/companion?join=${showTokenModal.token}`
-                  );
-                  setLinkCopied(true);
-                  setTimeout(() => setLinkCopied(false), 1500);
-                }}
+                onClick={() => copyToClipboard(
+                  `${window.location.origin}/companion?join=${showTokenModal.token}`,
+                  setLinkCopied,
+                )}
                 className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
               >
                 {linkCopied ? "Copied!" : "Copy Link"}

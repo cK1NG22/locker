@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { getStoredToken, setStoredToken, clearStoredToken } from "../lib/api";
+import { STORAGE_KEYS } from "../lib/constants";
 
 interface User {
   id: string;
@@ -19,7 +20,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(getStoredToken);
   const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem("locker_user");
+    const stored = localStorage.getItem(STORAGE_KEYS.USER);
     return stored ? JSON.parse(stored) : null;
   });
 
@@ -35,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStoredToken(data.access_token);
       setToken(data.access_token);
       setUser(data.user);
-      localStorage.setItem("locker_user", JSON.stringify(data.user));
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
       return true;
     } catch {
       return false;
@@ -44,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     clearStoredToken();
-    localStorage.removeItem("locker_user");
+    localStorage.removeItem(STORAGE_KEYS.USER);
     setToken(null);
     setUser(null);
   }, []);

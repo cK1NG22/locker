@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTeams } from "../../hooks/useTeams";
 import { useSkills } from "../../hooks/useSkills";
+import { copyToClipboard } from "../../lib/clipboard";
 
 interface CreatedTeam {
   id: string;
@@ -115,9 +116,7 @@ export default function TeamForm() {
 
   const copyToken = async () => {
     if (!createdTeam) return;
-    await navigator.clipboard.writeText(createdTeam.token);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    await copyToClipboard(createdTeam.token, setCopied);
   };
 
   const handleCreateTeam = async (e: React.FormEvent) => {
@@ -355,13 +354,7 @@ export default function TeamForm() {
                   {window.location.origin}/dashboard
                 </code>
                 <button
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(
-                      `${window.location.origin}/dashboard`
-                    );
-                    setSignupCopied(true);
-                    setTimeout(() => setSignupCopied(false), 1500);
-                  }}
+                  onClick={() => copyToClipboard(`${window.location.origin}/dashboard`, setSignupCopied)}
                   className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   {signupCopied ? "Copied!" : "Copy"}
