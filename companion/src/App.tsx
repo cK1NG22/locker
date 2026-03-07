@@ -45,12 +45,6 @@ export default function App() {
     localStorage.setItem(ONBOARDING_KEY, "1");
   };
 
-  const handleResetOnboarding = () => {
-    setToken(null);
-    setOnboardingComplete(false);
-    localStorage.removeItem(ONBOARDING_KEY);
-  };
-
   // Show onboarding if no token and not previously completed
   if (!token && !onboardingComplete) {
     return <Onboarding onComplete={handleOnboardingComplete} initialToken={joinToken} />;
