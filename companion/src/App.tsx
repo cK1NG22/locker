@@ -25,7 +25,7 @@ export default function App() {
   const { team, convention, skills, loading, error } = useSkills(token);
 
   // If we have a token saved but it's invalid, stay on the form with the error
-  const showSetup = !token || (error !== null && error === "Invalid team token");
+  const showSetup = !token || error === "Invalid team token";
 
   useEffect(() => {
     if (token) {

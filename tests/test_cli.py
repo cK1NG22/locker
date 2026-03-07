@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 import respx
 from typer.testing import CliRunner
 
@@ -13,9 +14,13 @@ JWT_TOKEN = "eytest.dummy.token"
 SKILL_RESPONSE = {"id": "abc123", "name": "email-style", "created_at": "2024-01-01"}
 
 
-def test_successful_deploy(tmp_path, monkeypatch):
+@pytest.fixture()
+def cli_env(monkeypatch):
     monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
     monkeypatch.setenv("LOCKER_JWT_TOKEN", JWT_TOKEN)
+
+
+def test_successful_deploy(tmp_path, cli_env):
 
     skill_file = tmp_path / "email-style.txt"
     skill_file.write_text("Always write concise emails.")
@@ -30,10 +35,7 @@ def test_successful_deploy(tmp_path, monkeypatch):
     assert 'Deployed skill "email-style" (id: abc123)' in result.output
 
 
-def test_file_not_found(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
-    monkeypatch.setenv("LOCKER_JWT_TOKEN", JWT_TOKEN)
-
+def test_file_not_found(tmp_path, cli_env):
     result = runner.invoke(app, ["deploy", str(tmp_path / "missing.txt")])
 
     assert result.exit_code == 1
@@ -66,9 +68,7 @@ def test_missing_jwt_token(tmp_path, monkeypatch):
     assert "LOCKER_JWT_TOKEN" in result.output
 
 
-def test_server_returns_409(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
-    monkeypatch.setenv("LOCKER_JWT_TOKEN", JWT_TOKEN)
+def test_server_returns_409(tmp_path, cli_env):
 
     skill_file = tmp_path / "dup-skill.txt"
     skill_file.write_text("content")
@@ -83,8 +83,7 @@ def test_server_returns_409(tmp_path, monkeypatch):
     assert "409" in result.output
 
 
-def test_server_returns_401(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
+def test_server_returns_401(tmp_path, monkeypatch, cli_env):
     monkeypatch.setenv("LOCKER_JWT_TOKEN", "bad-token")
 
     skill_file = tmp_path / "some-skill.txt"
@@ -103,9 +102,7 @@ def test_server_returns_401(tmp_path, monkeypatch):
 # ── Visibility flag tests ────────────────────────────────────────────
 
 
-def test_deploy_with_visibility_flag(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
-    monkeypatch.setenv("LOCKER_JWT_TOKEN", JWT_TOKEN)
+def test_deploy_with_visibility_flag(tmp_path, cli_env):
 
     skill_file = tmp_path / "my-skill.txt"
     skill_file.write_text("content")
@@ -121,9 +118,7 @@ def test_deploy_with_visibility_flag(tmp_path, monkeypatch):
     assert body["visibility"] == "hidden"
 
 
-def test_deploy_invalid_visibility(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
-    monkeypatch.setenv("LOCKER_JWT_TOKEN", JWT_TOKEN)
+def test_deploy_invalid_visibility(tmp_path, cli_env):
 
     skill_file = tmp_path / "my-skill.txt"
     skill_file.write_text("content")
@@ -134,9 +129,7 @@ def test_deploy_invalid_visibility(tmp_path, monkeypatch):
     assert "Invalid visibility" in result.output
 
 
-def test_deploy_without_visibility_omits_field(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
-    monkeypatch.setenv("LOCKER_JWT_TOKEN", JWT_TOKEN)
+def test_deploy_without_visibility_omits_field(tmp_path, cli_env):
 
     skill_file = tmp_path / "my-skill.txt"
     skill_file.write_text("content")
@@ -163,9 +156,7 @@ FOLDER_RESPONSE = {
 }
 
 
-def test_folder_deploy_success(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
-    monkeypatch.setenv("LOCKER_JWT_TOKEN", JWT_TOKEN)
+def test_folder_deploy_success(tmp_path, cli_env):
 
     # Create sibling .md file
     sibling = tmp_path / "my-skill.md"
@@ -195,9 +186,7 @@ def test_folder_deploy_success(tmp_path, monkeypatch):
     assert len(body["files"]) == 2
 
 
-def test_folder_deploy_missing_sibling_md(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
-    monkeypatch.setenv("LOCKER_JWT_TOKEN", JWT_TOKEN)
+def test_folder_deploy_missing_sibling_md(tmp_path, cli_env):
 
     # Create folder without a sibling .md file
     folder = tmp_path / "no-md"
@@ -210,19 +199,15 @@ def test_folder_deploy_missing_sibling_md(tmp_path, monkeypatch):
     assert "no-md.md" in result.output
 
 
-def test_folder_deploy_missing_folder(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
-    monkeypatch.setenv("LOCKER_JWT_TOKEN", JWT_TOKEN)
+def test_folder_deploy_missing_folder(tmp_path, cli_env):
 
     result = runner.invoke(app, ["deploy", str(tmp_path / "nonexistent")])
 
     assert result.exit_code == 1
 
 
-def test_single_file_deploy_still_works(tmp_path, monkeypatch):
+def test_single_file_deploy_still_works(tmp_path, cli_env):
     """Confirm single-file deploy continues to work via the is_dir() routing."""
-    monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
-    monkeypatch.setenv("LOCKER_JWT_TOKEN", JWT_TOKEN)
 
     skill_file = tmp_path / "quick-reply.txt"
     skill_file.write_text("Reply to all emails politely.")

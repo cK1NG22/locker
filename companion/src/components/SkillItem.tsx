@@ -20,7 +20,7 @@ export default function SkillItem({ skill, convention = "/l", token }: SkillItem
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const isOpen = skill.content !== null;
+  const hasContent = skill.content !== null;
 
   return (
     <div className="border border-gray-200 rounded-md bg-white hover:border-gray-300 transition-colors">
@@ -37,7 +37,7 @@ export default function SkillItem({ skill, convention = "/l", token }: SkillItem
           </span>
         </div>
 
-        {isOpen ? (
+        {hasContent ? (
           <button
             onClick={copyCommand}
             className="shrink-0 ml-3 px-3 py-1 text-xs font-medium rounded border transition-colors bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
@@ -56,7 +56,7 @@ export default function SkillItem({ skill, convention = "/l", token }: SkillItem
           <p className="mt-2 text-sm text-gray-600">
             {skill.description || "No description available."}
           </p>
-          {isOpen && (
+          {hasContent && (
             <>
               <pre className="mt-2 text-xs font-mono bg-gray-50 rounded p-3 overflow-auto">
                 {skill.content}

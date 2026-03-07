@@ -11,7 +11,7 @@ export function SetupWizard({ token, convention = "/l" }: Props) {
   function copy() {
     navigator.clipboard.writeText(cmd);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   return (
