@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,12 +7,9 @@ from pydantic import BaseModel
 from src.auth import require_user
 from vault.audit import audit
 from vault.db import get_db
+from vault.helpers import utc_now, require_team_admin
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 class ShareRequestCreate(BaseModel):
@@ -44,8 +40,8 @@ async def create_share_request(body: ShareRequestCreate, user: dict = Depends(re
         raise HTTPException(status_code=400, detail="Both teams must belong to the same org")
 
     # Require org admin
-    from vault.org_routes import _require_org_admin
-    await _require_org_admin(from_team["org_id"], user_id)
+    from vault.org_routes import _require_org_admin as require_org_admin
+    await require_org_admin(from_team["org_id"], user_id)
 
     # Verify skill exists and is assigned to from_team
     skill = await db.fetchrow(
@@ -56,7 +52,7 @@ async def create_share_request(body: ShareRequestCreate, user: dict = Depends(re
         raise HTTPException(status_code=404, detail="Skill not found in source team")
 
     req_id = str(uuid.uuid4())
-    now = _now()
+    now = utc_now()
     await db.execute(
         "INSERT INTO skill_share_requests (id, skill_id, from_team_id, to_team_id, requested_by, status, created_at) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7)",
@@ -75,8 +71,7 @@ async def list_share_requests(
     db = get_db()
     if team_id:
         # Require team admin to view requests
-        from vault.team_routes import _require_team_admin
-        await _require_team_admin(team_id, user["sub"])
+        await require_team_admin(team_id, user["sub"])
         rows = await db.fetch(
             "SELECT sr.id, sr.skill_id, s.name AS skill_name, sr.from_team_id, ft.name AS from_team_name, "
             "sr.to_team_id, tt.name AS to_team_name, sr.requested_by, sr.status, sr.created_at, sr.resolved_at "
@@ -129,10 +124,9 @@ async def resolve_share_request(request_id: str, body: ShareRequestResolve, user
         raise HTTPException(status_code=400, detail="Request already resolved")
 
     # Require team admin of the target team
-    from vault.team_routes import _require_team_admin
-    await _require_team_admin(row["to_team_id"], user["sub"])
+    await require_team_admin(row["to_team_id"], user["sub"])
 
-    now = _now()
+    now = utc_now()
     await db.execute(
         "UPDATE skill_share_requests SET status = $1, resolved_at = $2, resolved_by = $3 WHERE id = $4",
         body.status, now, user["sub"], request_id,

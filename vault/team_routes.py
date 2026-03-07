@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.auth import require_user
 from vault.audit import audit
 from vault.db import get_db
+from vault.helpers import utc_now, require_team_admin
 from vault.models import (
     TeamCreate,
     TeamUpdate,
@@ -23,29 +23,6 @@ from vault.models import (
 from vault.token_utils import generate_token
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-async def _require_team_admin(team_id: str, user_id: str) -> None:
-    """Raise 403 if user is not an admin member of the team.
-    NULL-owner teams (pre-3.2) are editable by any authenticated user.
-    """
-    db = get_db()
-    row = await db.fetchrow("SELECT owner_id FROM teams WHERE id = $1", team_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Team not found")
-    # Legacy teams with no owner: allow any authenticated user
-    if row["owner_id"] is None:
-        return
-    member = await db.fetchrow(
-        "SELECT role FROM team_members WHERE team_id = $1 AND user_id = $2",
-        team_id, user_id,
-    )
-    if member is None or member["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Team admin access required")
 
 
 async def _require_team_share(team_id: str, user_id: str) -> None:
@@ -72,7 +49,7 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
     team_id = str(uuid.uuid4())
     member_id = str(uuid.uuid4())
     plaintext, token_hash, token_prefix = generate_token()
-    now = _now()
+    now = utc_now()
     user_id = user["sub"]
     db = get_db()
     async with db.acquire() as conn:
@@ -157,7 +134,7 @@ async def get_team(team_id: str):
 
 @router.put("/teams/{team_id}", response_model=TeamOut)
 async def update_team(team_id: str, body: TeamUpdate, user: dict = Depends(require_user)):
-    await _require_team_admin(team_id, user["sub"])
+    await require_team_admin(team_id, user["sub"])
     db = get_db()
     row = await db.fetchrow(
         "SELECT id, name, token_prefix, owner_id, created_at FROM teams WHERE id = $1", team_id
@@ -178,7 +155,7 @@ async def update_team(team_id: str, body: TeamUpdate, user: dict = Depends(requi
 
 @router.delete("/teams/{team_id}", status_code=204)
 async def delete_team(team_id: str, user: dict = Depends(require_user)):
-    await _require_team_admin(team_id, user["sub"])
+    await require_team_admin(team_id, user["sub"])
     db = get_db()
     await db.execute("DELETE FROM teams WHERE id = $1", team_id)
     await audit(db, user["sub"], "team.delete", "team", team_id)
@@ -186,7 +163,7 @@ async def delete_team(team_id: str, user: dict = Depends(require_user)):
 
 @router.post("/teams/{team_id}/rotate-token", response_model=TeamCreated)
 async def rotate_token(team_id: str, user: dict = Depends(require_user)):
-    await _require_team_admin(team_id, user["sub"])
+    await require_team_admin(team_id, user["sub"])
     db = get_db()
     row = await db.fetchrow(
         "SELECT id, name, owner_id, created_at FROM teams WHERE id = $1", team_id
@@ -231,7 +208,7 @@ async def set_team_skills(team_id: str, body: TeamSkillsSet, user: dict = Depend
 
 @router.post("/teams/{team_id}/members", status_code=201, response_model=TeamMemberOut)
 async def add_member(team_id: str, body: TeamMemberAdd, user: dict = Depends(require_user)):
-    await _require_team_admin(team_id, user["sub"])
+    await require_team_admin(team_id, user["sub"])
     db = get_db()
     # Look up user by email
     user_row = await db.fetchrow("SELECT id, email, name FROM users WHERE email = $1", body.email)
@@ -246,7 +223,7 @@ async def add_member(team_id: str, body: TeamMemberAdd, user: dict = Depends(req
     if dup is not None:
         raise HTTPException(status_code=409, detail="User is already a member of this team")
     member_id = str(uuid.uuid4())
-    now = _now()
+    now = utc_now()
     await db.execute(
         "INSERT INTO team_members (id, team_id, user_id, role, can_share, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
         member_id, team_id, target_user_id, "member", False, now,
@@ -267,7 +244,7 @@ async def add_member(team_id: str, body: TeamMemberAdd, user: dict = Depends(req
 async def update_member(
     team_id: str, member_id: str, body: TeamMemberUpdate, user: dict = Depends(require_user)
 ):
-    await _require_team_admin(team_id, user["sub"])
+    await require_team_admin(team_id, user["sub"])
     if body.role is None and body.can_share is None:
         raise HTTPException(status_code=422, detail="At least one field required")
     db = get_db()
@@ -307,7 +284,7 @@ async def update_member(
 
 @router.delete("/teams/{team_id}/members/{member_id}", status_code=204)
 async def remove_member(team_id: str, member_id: str, user: dict = Depends(require_user)):
-    await _require_team_admin(team_id, user["sub"])
+    await require_team_admin(team_id, user["sub"])
     db = get_db()
     row = await db.fetchrow(
         "SELECT tm.user_id, tm.role FROM team_members tm WHERE tm.id = $1 AND tm.team_id = $2",
@@ -385,7 +362,7 @@ async def copy_skill_to_team(skill_id: str, target_team_id: str, user: dict = De
         )
 
     # 6. Copy skill record + files + link in a transaction
-    now = _now()
+    now = utc_now()
     new_skill_id = str(uuid.uuid4())
     file_rows = await db.fetch(
         "SELECT path, content, size_bytes FROM skill_files WHERE skill_id = $1",

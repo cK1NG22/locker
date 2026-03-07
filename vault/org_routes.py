@@ -1,6 +1,5 @@
 import re
 import uuid
-from datetime import datetime, timezone
 
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.auth import require_user
 from vault.audit import audit
 from vault.db import get_db
+from vault.helpers import utc_now, require_team_admin
 from vault.models import (
     OrgCreate,
     OrgUpdate,
@@ -21,10 +21,6 @@ from vault.models import (
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
 
 SLUG_RE = re.compile(r"^[a-z0-9-]{2,32}$")
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 async def _require_org_member(org_id: str, user_id: str) -> None:
@@ -53,7 +49,7 @@ async def create_org(body: OrgCreate, user: dict = Depends(require_user)):
         raise HTTPException(status_code=422, detail="Slug must be 2-32 lowercase alphanumeric or hyphens")
     org_id = str(uuid.uuid4())
     member_id = str(uuid.uuid4())
-    now = _now()
+    now = utc_now()
     user_id = user["sub"]
     db = get_db()
     async with db.acquire() as conn:
@@ -242,8 +238,7 @@ async def link_team_to_org(org_id: str, team_id: str, user: dict = Depends(requi
     if team is None:
         raise HTTPException(status_code=404, detail="Team not found")
     # Check team admin permission
-    from vault.team_routes import _require_team_admin
-    await _require_team_admin(team_id, user["sub"])
+    await require_team_admin(team_id, user["sub"])
     if team["org_id"] is not None and team["org_id"] != org_id:
         raise HTTPException(status_code=409, detail="Team already belongs to another org")
     await db.execute("UPDATE teams SET org_id = $1 WHERE id = $2", org_id, team_id)
@@ -260,8 +255,7 @@ async def unlink_team_from_org(org_id: str, team_id: str, user: dict = Depends(r
         raise HTTPException(status_code=404, detail="Team not found")
     if team["org_id"] != org_id:
         raise HTTPException(status_code=400, detail="Team is not linked to this org")
-    from vault.team_routes import _require_team_admin
-    await _require_team_admin(team_id, user["sub"])
+    await require_team_admin(team_id, user["sub"])
     await db.execute("UPDATE teams SET org_id = NULL WHERE id = $1", team_id)
     await audit(db, user["sub"], "org.team.unlink", "team", team_id, {"org_id": org_id})
     return {"ok": True}

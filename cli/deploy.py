@@ -1,12 +1,12 @@
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import httpx
 import typer
 
 
-def deploy(file_path: Path, description: Optional[str] = None, visibility: Optional[str] = None) -> None:
+def _get_credentials() -> Tuple[str, str]:
     vault_url = os.environ.get("LOCKER_VAULT_URL")
     if not vault_url:
         typer.echo("Error: LOCKER_VAULT_URL environment variable is not set.")
@@ -16,6 +16,12 @@ def deploy(file_path: Path, description: Optional[str] = None, visibility: Optio
     if not jwt_token:
         typer.echo("Error: LOCKER_JWT_TOKEN environment variable is not set.")
         raise typer.Exit(code=1)
+
+    return vault_url, jwt_token
+
+
+def deploy(file_path: Path, description: Optional[str] = None, visibility: Optional[str] = None) -> None:
+    vault_url, jwt_token = _get_credentials()
 
     if not file_path.exists():
         typer.echo(f"Error: File not found: {file_path}")
@@ -53,15 +59,7 @@ def deploy(file_path: Path, description: Optional[str] = None, visibility: Optio
 
 
 def deploy_folder(folder_path: Path, description: Optional[str] = None, visibility: Optional[str] = None) -> None:
-    vault_url = os.environ.get("LOCKER_VAULT_URL")
-    if not vault_url:
-        typer.echo("Error: LOCKER_VAULT_URL environment variable is not set.")
-        raise typer.Exit(code=1)
-
-    jwt_token = os.environ.get("LOCKER_JWT_TOKEN")
-    if not jwt_token:
-        typer.echo("Error: LOCKER_JWT_TOKEN environment variable is not set.")
-        raise typer.Exit(code=1)
+    vault_url, jwt_token = _get_credentials()
 
     if not folder_path.exists():
         typer.echo(f"Error: Folder not found: {folder_path}")

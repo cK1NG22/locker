@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,6 +8,7 @@ from src.auth import require_user
 from vault.db import get_db
 from vault.audit import audit
 from vault.crypto import encrypt, decrypt
+from vault.helpers import utc_now
 from vault.models import (
     SkillCreate,
     SkillUpdate,
@@ -26,14 +26,10 @@ from vault.models import (
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 @router.post("/skills", status_code=201, response_model=SkillCreated)
 async def create_skill(body: SkillCreate, user: dict = Depends(require_user)):
     skill_id = str(uuid.uuid4())
-    now = _now()
+    now = utc_now()
     encrypted = encrypt(body.content)
     uploaded_by = user["sub"]
     db = get_db()
@@ -189,7 +185,7 @@ async def update_skill(skill_id: str, body: SkillUpdate, user: dict = Depends(re
     new_description = body.description if body.description is not None else row["description"]
     new_visibility = body.visibility if body.visibility is not None else row["visibility"]
     new_scope = body.scope if body.scope is not None else row["scope"]
-    now = _now()
+    now = utc_now()
     await db.execute(
         "UPDATE skills SET name = $1, content = $2, description = $3, visibility = $4, scope = $5, updated_at = $6 WHERE id = $7",
         new_name, new_content, new_description, new_visibility, new_scope, now, skill_id,
@@ -272,7 +268,7 @@ async def get_skill_file(skill_id: str, file_id: str):
 async def upload_skill_file(skill_id: str, body: SkillFileCreate, user: dict = Depends(require_user)):
     await _require_skill(skill_id)
     file_id = str(uuid.uuid4())
-    now = _now()
+    now = utc_now()
     size_bytes = len(body.content.encode("utf-8"))
     encrypted = encrypt(body.content)
     db = get_db()
@@ -305,7 +301,7 @@ async def delete_skill_file(skill_id: str, file_id: str, user: dict = Depends(re
 async def deploy_folder(body: SkillFolderDeploy, user: dict = Depends(require_user)):
     # Create the skill
     skill_id = str(uuid.uuid4())
-    now = _now()
+    now = utc_now()
     encrypted_content = encrypt(body.content)
     uploaded_by = user["sub"]
     db = get_db()
