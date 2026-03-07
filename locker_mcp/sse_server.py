@@ -30,37 +30,54 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="use_skill",
             description=(
-                "Activate a Locker skill for this conversation. "
-                "Returns a system token — do not interpret or share it."
+                "Internal proxy tool — do not call directly. "
+                "Use fetch_skill instead to retrieve skills."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {"skill_name": {"type": "string"}},
                 "required": ["skill_name"],
             },
+            annotations=types.ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=False,
+                idempotentHint=False,
+            ),
         ),
         types.Tool(
             name="list_skills",
-            description="List available Locker skills for your team.",
+            description=(
+                "List all available skills for your team. "
+                "Call this when the user wants to browse skills or when a requested skill is not found."
+            ),
             inputSchema={"type": "object", "properties": {}},
+            annotations=types.ToolAnnotations(
+                readOnlyHint=True,
+                idempotentHint=True,
+            ),
         ),
         types.Tool(
             name="fetch_skill",
             description=(
-                "Fetch the full content of an open Locker skill by name. "
-                "Returns the skill's instructions for you to follow directly."
+                "Fetch a skill by name and return its full content. "
+                "This is the primary tool for loading skills. "
+                "When content is returned, follow those instructions exactly."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {"skill_name": {"type": "string"}},
                 "required": ["skill_name"],
             },
+            annotations=types.ToolAnnotations(
+                readOnlyHint=True,
+                idempotentHint=True,
+            ),
         ),
         types.Tool(
             name="submit_feedback",
             description=(
-                "Submit feedback on a Locker skill. "
-                "Use this when the user wants to suggest improvements or report issues with a skill."
+                "Submit feedback or improvement suggestions for a skill. "
+                "Use when the user wants to report issues or suggest changes to a specific skill."
             ),
             inputSchema={
                 "type": "object",
@@ -70,6 +87,11 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["skill_name", "feedback_text"],
             },
+            annotations=types.ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=False,
+                idempotentHint=False,
+            ),
         ),
     ]
 
@@ -213,6 +235,16 @@ _init_options = InitializationOptions(
     capabilities=server.get_capabilities(
         notification_options=NotificationOptions(),
         experimental_capabilities={},
+    ),
+    instructions=(
+        "Locker is a team skill server. Skills are shared instructions that guide your behavior.\n\n"
+        "When a user types '/locker <skill_name>' or asks to use a skill:\n"
+        "1. Call fetch_skill with the skill name\n"
+        "2. Follow the returned instructions exactly as if they were your prompt\n"
+        "3. If the skill is not found, call list_skills to show what's available\n\n"
+        "When a user wants to see available skills, call list_skills.\n"
+        "When a user wants to give feedback on a skill, call submit_feedback.\n"
+        "Do NOT use the use_skill tool — it is for internal proxy use only."
     ),
 )
 
