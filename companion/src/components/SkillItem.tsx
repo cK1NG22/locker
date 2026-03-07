@@ -1,17 +1,21 @@
 import { useState } from "react";
 import type { Skill } from "../hooks/useSkills";
+import FeedbackForm from "./FeedbackForm";
 
 interface SkillItemProps {
   skill: Skill;
+  convention?: string;
+  token: string;
 }
 
-export default function SkillItem({ skill }: SkillItemProps) {
+export default function SkillItem({ skill, convention = "/l", token }: SkillItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   const copyCommand = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    await navigator.clipboard.writeText(`/locker ${skill.name}`);
+    await navigator.clipboard.writeText(`${convention} ${skill.name}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -19,9 +23,7 @@ export default function SkillItem({ skill }: SkillItemProps) {
   const isOpen = skill.content !== null;
 
   return (
-    <div
-      className="border border-gray-200 rounded-md bg-white hover:border-gray-300 transition-colors"
-    >
+    <div className="border border-gray-200 rounded-md bg-white hover:border-gray-300 transition-colors">
       <div
         className="flex items-center justify-between px-4 py-3 cursor-pointer select-none"
         onClick={() => setExpanded(!expanded)}
@@ -62,6 +64,22 @@ export default function SkillItem({ skill }: SkillItemProps) {
               <p className="mt-2 text-xs text-gray-400 font-mono">
                 /locker {skill.name}
               </p>
+              {skill.id && !showFeedback && (
+                <button
+                  onClick={() => setShowFeedback(true)}
+                  className="mt-2 px-3 py-1 text-xs font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Give feedback
+                </button>
+              )}
+              {skill.id && showFeedback && (
+                <FeedbackForm
+                  skillId={skill.id}
+                  skillName={skill.name}
+                  token={token}
+                  onClose={() => setShowFeedback(false)}
+                />
+              )}
             </>
           )}
         </div>

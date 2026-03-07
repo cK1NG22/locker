@@ -134,3 +134,67 @@ async def test_feedback_requires_team_token(client):
 async def test_feedback_admin_requires_auth(client):
     r = await client.get("/api/v1/feedback")
     assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_feedback_includes_skill_name(client):
+    skill_id, token = await _create_skill_and_team(client)
+    await client.post(
+        f"/api/v1/skills/{skill_id}/feedback",
+        json={"feedback_text": "Skill name test"},
+        headers={"X-Team-Token": token},
+    )
+    r = await client.get("/api/v1/feedback", headers=ADMIN)
+    assert r.status_code == 200
+    item = r.json()["feedback"][0]
+    assert item["skill_name"] == "test-skill"
+
+
+@pytest.mark.asyncio
+async def test_feedback_excludes_submitter_by_default(client):
+    skill_id, token = await _create_skill_and_team(client)
+    await client.post(
+        f"/api/v1/skills/{skill_id}/feedback",
+        json={"feedback_text": "Privacy test"},
+        headers={"X-Team-Token": token},
+    )
+    r = await client.get("/api/v1/feedback", headers=ADMIN)
+    assert r.status_code == 200
+    item = r.json()["feedback"][0]
+    assert "team_id" not in item
+    assert "submitter_team_name" not in item
+
+
+@pytest.mark.asyncio
+async def test_feedback_includes_submitter_when_requested(client):
+    skill_id, token = await _create_skill_and_team(client)
+    await client.post(
+        f"/api/v1/skills/{skill_id}/feedback",
+        json={"feedback_text": "Submitter test"},
+        headers={"X-Team-Token": token},
+    )
+    r = await client.get(
+        "/api/v1/feedback?include_submitter=true", headers=ADMIN
+    )
+    assert r.status_code == 200
+    item = r.json()["feedback"][0]
+    assert "team_id" in item
+    assert item["submitter_team_name"] == "FeedbackTeam"
+
+
+@pytest.mark.asyncio
+async def test_update_feedback_includes_skill_name(client):
+    skill_id, token = await _create_skill_and_team(client)
+    submit = await client.post(
+        f"/api/v1/skills/{skill_id}/feedback",
+        json={"feedback_text": "Patch test"},
+        headers={"X-Team-Token": token},
+    )
+    feedback_id = submit.json()["id"]
+    r = await client.patch(
+        f"/api/v1/feedback/{feedback_id}",
+        json={"status": "applied"},
+        headers=ADMIN,
+    )
+    assert r.status_code == 200
+    assert r.json()["skill_name"] == "test-skill"

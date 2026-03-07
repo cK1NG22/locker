@@ -77,15 +77,21 @@ async def list_tools() -> list[types.Tool]:
             name="submit_feedback",
             description=(
                 "Submit feedback or improvement suggestions for a skill. "
+                "You can provide structured fields (observed, expected, cause, suggestion) "
+                "which will be formatted into a template, OR provide free-text via feedback_text. "
                 "Use when the user wants to report issues or suggest changes to a specific skill."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "skill_name": {"type": "string"},
-                    "feedback_text": {"type": "string"},
+                    "skill_name": {"type": "string", "description": "Name of the skill to give feedback on"},
+                    "feedback_text": {"type": "string", "description": "Free-text feedback (used if structured fields are not provided)"},
+                    "observed": {"type": "string", "description": "What happened — describe the output you got"},
+                    "expected": {"type": "string", "description": "What the output should have looked like"},
+                    "cause": {"type": "string", "description": "What in the skill might be causing this"},
+                    "suggestion": {"type": "string", "description": "Optional — your idea for how to improve the skill"},
                 },
-                "required": ["skill_name", "feedback_text"],
+                "required": ["skill_name"],
             },
             annotations=types.ToolAnnotations(
                 readOnlyHint=False,
@@ -139,7 +145,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         skills = data.get("skills", [])
         if not skills:
             return [types.TextContent(type="text", text="No skills available for your team.")]
-        lines = [f"Available skills for team '{data.get('team', '')}':\n"]
+        convention = data.get("convention", "/l")
+        lines = [f"Available skills for team '{data.get('team', '')}' (use {convention} <skill_name>):\n"]
         for s in skills:
             lines.append(f"- {s['name']}: {s.get('description') or 'No description'}")
         return [types.TextContent(type="text", text="\n".join(lines))]
@@ -184,11 +191,23 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
     elif name == "submit_feedback":
         skill_name = arguments.get("skill_name", "").strip()
-        feedback_text = arguments.get("feedback_text", "").strip()
         if not skill_name:
             raise ValueError("skill_name is required")
+        # Build feedback_text from structured fields or fallback to free-text
+        template_fields = [
+            ("observed", "What happened"),
+            ("expected", "What I expected"),
+            ("cause", "Why I think it happened"),
+            ("suggestion", "Suggested fix"),
+        ]
+        parts = [
+            f"{label}: {val}"
+            for key, label in template_fields
+            if (val := arguments.get(key, "").strip())
+        ]
+        feedback_text = "\n".join(parts) if parts else arguments.get("feedback_text", "").strip()
         if not feedback_text:
-            raise ValueError("feedback_text is required")
+            raise ValueError("Provide feedback_text or at least one structured field (observed, expected, cause)")
         if not team_token:
             return [types.TextContent(
                 type="text",

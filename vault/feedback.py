@@ -14,6 +14,27 @@ from vault.audit import audit
 from vault.db import get_db
 from vault.token_utils import hash_token
 
+_FEEDBACK_SELECT = (
+    "SELECT f.id, f.skill_id, f.team_id, f.feedback_text, f.status, "
+    "f.submitter_team_name, f.created_at, s.name AS skill_name "
+    "FROM skill_feedback f LEFT JOIN skills s ON f.skill_id = s.id"
+)
+
+
+def _row_to_dict(r, include_submitter: bool = False) -> dict:
+    item = {
+        "id": r["id"],
+        "skill_id": r["skill_id"],
+        "feedback_text": r["feedback_text"],
+        "status": r["status"],
+        "created_at": r["created_at"],
+        "skill_name": r["skill_name"],
+    }
+    if include_submitter:
+        item["team_id"] = r["team_id"]
+        item["submitter_team_name"] = r["submitter_team_name"]
+    return item
+
 
 class FeedbackBody(BaseModel):
     feedback_text: str
@@ -38,14 +59,18 @@ async def _require_team_token(
     return {"id": row["id"], "name": row["name"]}
 
 
-async def submit_feedback(db, skill_id: str, feedback_text: str, team_id: Optional[str] = None) -> dict:
+async def submit_feedback(
+    db, skill_id: str, feedback_text: str,
+    team_id: Optional[str] = None,
+    submitter_team_name: Optional[str] = None,
+) -> dict:
     """Insert a feedback row and return it."""
     feedback_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
     await db.execute(
-        "INSERT INTO skill_feedback (id, skill_id, team_id, feedback_text, status, created_at) "
-        "VALUES ($1, $2, $3, $4, 'pending', $5)",
-        feedback_id, skill_id, team_id, feedback_text, created_at,
+        "INSERT INTO skill_feedback (id, skill_id, team_id, feedback_text, status, submitter_team_name, created_at) "
+        "VALUES ($1, $2, $3, $4, 'pending', $5, $6)",
+        feedback_id, skill_id, team_id, feedback_text, submitter_team_name, created_at,
     )
     return {
         "id": feedback_id,
@@ -70,41 +95,32 @@ async def post_feedback(
 ):
     team = await _require_team_token(x_team_token)
     db = get_db()
-    # Verify skill exists
     row = await db.fetchrow("SELECT id FROM skills WHERE id = $1", skill_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Skill not found")
-    result = await submit_feedback(db, skill_id, body.feedback_text, team_id=team["id"])
-    return result
+    return await submit_feedback(
+        db, skill_id, body.feedback_text,
+        team_id=team["id"],
+        submitter_team_name=team["name"],
+    )
 
 
 @router.get("/feedback", dependencies=[Depends(require_user)])
-async def get_feedback(status: Optional[str] = Query(None)):
+async def get_feedback(
+    status: Optional[str] = Query(None),
+    include_submitter: bool = Query(False),
+):
     db = get_db()
     if status:
         rows = await db.fetch(
-            "SELECT id, skill_id, team_id, feedback_text, status, created_at "
-            "FROM skill_feedback WHERE status = $1 ORDER BY created_at DESC",
+            f"{_FEEDBACK_SELECT} WHERE f.status = $1 ORDER BY f.created_at DESC",
             status,
         )
     else:
         rows = await db.fetch(
-            "SELECT id, skill_id, team_id, feedback_text, status, created_at "
-            "FROM skill_feedback ORDER BY created_at DESC"
+            f"{_FEEDBACK_SELECT} ORDER BY f.created_at DESC"
         )
-    return {
-        "feedback": [
-            {
-                "id": r["id"],
-                "skill_id": r["skill_id"],
-                "team_id": r["team_id"],
-                "feedback_text": r["feedback_text"],
-                "status": r["status"],
-                "created_at": r["created_at"],
-            }
-            for r in rows
-        ]
-    }
+    return {"feedback": [_row_to_dict(r, include_submitter) for r in rows]}
 
 
 @router.patch("/feedback/{feedback_id}")
@@ -122,16 +138,5 @@ async def update_feedback_status(feedback_id: str, body: StatusBody, user: dict 
         body.status, feedback_id,
     )
     await audit(db, user["sub"], "feedback.update_status", "feedback", feedback_id, {"status": body.status})
-    r = await db.fetchrow(
-        "SELECT id, skill_id, team_id, feedback_text, status, created_at "
-        "FROM skill_feedback WHERE id = $1",
-        feedback_id,
-    )
-    return {
-        "id": r["id"],
-        "skill_id": r["skill_id"],
-        "team_id": r["team_id"],
-        "feedback_text": r["feedback_text"],
-        "status": r["status"],
-        "created_at": r["created_at"],
-    }
+    r = await db.fetchrow(f"{_FEEDBACK_SELECT} WHERE f.id = $1", feedback_id)
+    return _row_to_dict(r, include_submitter=True)

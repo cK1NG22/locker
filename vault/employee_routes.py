@@ -45,4 +45,14 @@ async def get_employee_skills(
     for row in rows:
         content = decrypt(row["content"]) if row["visibility"] == "open" else None
         skills.append(EmployeeSkill(id=row["id"], name=row["name"], description=row["description"], content=content))
-    return {"team": team["name"], "skills": skills}
+    # Look up org convention if team belongs to an org
+    convention = "/l"
+    team_row = await db.fetchrow("SELECT org_id FROM teams WHERE id = $1", team["id"])
+    if team_row and team_row["org_id"]:
+        org_row = await db.fetchrow(
+            "SELECT skill_convention FROM organizations WHERE id = $1",
+            team_row["org_id"],
+        )
+        if org_row:
+            convention = org_row["skill_convention"]
+    return {"team": team["name"], "convention": convention, "skills": skills}

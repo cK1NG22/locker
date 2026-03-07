@@ -93,12 +93,19 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
 
 
 @router.get("/teams", response_model=list[TeamSummary])
-async def list_teams():
+async def list_teams(user: dict = Depends(require_user)):
     db = get_db()
+    user_id = user["sub"]
     rows = await db.fetch(
         "SELECT t.id, t.name, COUNT(ts.skill_id) AS skill_count "
         "FROM teams t LEFT JOIN team_skills ts ON t.id = ts.team_id "
-        "GROUP BY t.id, t.name"
+        "WHERE t.id IN ("
+        "  SELECT tm.team_id FROM team_members tm WHERE tm.user_id = $1"
+        "  UNION"
+        "  SELECT t2.id FROM teams t2 JOIN org_members om ON t2.org_id = om.org_id WHERE om.user_id = $1"
+        ") "
+        "GROUP BY t.id, t.name",
+        user_id,
     )
     return [
         TeamSummary(id=row["id"], name=row["name"], skill_count=row["skill_count"])

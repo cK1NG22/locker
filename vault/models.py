@@ -177,3 +177,49 @@ class SkillCopied(BaseModel):
     name: str
     target_team_id: str
     created_at: str
+
+
+# --- Organization models ---
+
+
+class OrgCreate(BaseModel):
+    name: str
+    slug: str
+
+
+class OrgUpdate(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    skill_convention: Optional[str] = None
+
+
+class OrgMemberOut(BaseModel):
+    id: str
+    user_id: str
+    email: Optional[str] = None
+    name: Optional[str] = None
+    role: str
+
+
+class OrgMemberAdd(BaseModel):
+    email: str
+
+
+class OrgOut(BaseModel):
+    id: str
+    name: str
+    slug: str
+    owner_id: str
+    skill_convention: str
+    created_at: str
+
+
+class OrgDetail(BaseModel):
+    id: str
+    name: str
+    slug: str
+    owner_id: str
+    skill_convention: str
+    created_at: str
+    teams: List[TeamSummary] = []
+    members: List[OrgMemberOut] = []

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 
 export interface Skill {
+  id?: string;
   name: string;
   description: string | null;
   content: string | null;
@@ -8,11 +9,13 @@ export interface Skill {
 
 interface SkillsResponse {
   team: string;
+  convention?: string;
   skills: Skill[];
 }
 
 interface UseSkillsResult {
   team: string | null;
+  convention: string;
   skills: Skill[];
   loading: boolean;
   error: string | null;
@@ -22,6 +25,7 @@ const REFRESH_INTERVAL = 30_000;
 
 export function useSkills(token: string | null): UseSkillsResult {
   const [team, setTeam] = useState<string | null>(null);
+  const [convention, setConvention] = useState("/l");
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +51,7 @@ export function useSkills(token: string | null): UseSkillsResult {
 
       const data: SkillsResponse = await res.json();
       setTeam(data.team);
+      setConvention(data.convention || "/l");
       setSkills(data.skills);
       setError(null);
     } catch {
@@ -68,5 +73,5 @@ export function useSkills(token: string | null): UseSkillsResult {
     return () => clearInterval(id);
   }, [token, error, fetchSkills]);
 
-  return { team, skills, loading, error };
+  return { team, convention, skills, loading, error };
 }

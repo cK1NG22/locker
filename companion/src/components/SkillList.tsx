@@ -4,10 +4,12 @@ import SkillItem from "./SkillItem";
 interface SkillListProps {
   team: string;
   skills: Skill[];
+  convention?: string;
+  token: string;
   onChangeToken: () => void;
 }
 
-export default function SkillList({ team, skills, onChangeToken }: SkillListProps) {
+export default function SkillList({ team, skills, convention = "/l", token, onChangeToken }: SkillListProps) {
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -28,7 +30,7 @@ export default function SkillList({ team, skills, onChangeToken }: SkillListProp
       ) : (
         <div className="space-y-2">
           {skills.map((s) => (
-            <SkillItem key={s.name} skill={s} />
+            <SkillItem key={s.name} skill={s} convention={convention} token={token} />
           ))}
         </div>
       )}

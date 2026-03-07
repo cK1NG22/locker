@@ -56,12 +56,30 @@ CREATE TABLE IF NOT EXISTS skills (
     updated_at  TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS organizations (
+    id                TEXT PRIMARY KEY,
+    name              TEXT NOT NULL,
+    slug              TEXT NOT NULL UNIQUE,
+    owner_id          TEXT NOT NULL,
+    skill_convention  TEXT NOT NULL DEFAULT '/l',
+    created_at        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS org_members (
+    id          TEXT PRIMARY KEY,
+    org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id     TEXT NOT NULL,
+    role        TEXT NOT NULL DEFAULT 'member',
+    UNIQUE(org_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS teams (
     id           TEXT PRIMARY KEY,
     name         TEXT NOT NULL UNIQUE,
     token_hash   TEXT NOT NULL UNIQUE,
     token_prefix TEXT NOT NULL,
     owner_id     TEXT,
+    org_id       TEXT REFERENCES organizations(id) ON DELETE SET NULL,
     created_at   TEXT NOT NULL
 );
 
@@ -105,7 +123,20 @@ CREATE TABLE IF NOT EXISTS skill_feedback (
     team_id     TEXT,
     feedback_text TEXT NOT NULL,
     status      TEXT NOT NULL DEFAULT 'pending',
+    submitter_team_name TEXT,
     created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS skill_share_requests (
+    id              TEXT PRIMARY KEY,
+    skill_id        TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+    from_team_id    TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    to_team_id      TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    requested_by    TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    created_at      TEXT NOT NULL,
+    resolved_at     TEXT,
+    resolved_by     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -120,8 +151,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 """
 
 _TABLES = [
-    "audit_logs", "skill_feedback", "skill_usage", "skill_files",
-    "team_skills", "team_members", "teams", "skills", "users",
+    "audit_logs", "skill_share_requests", "skill_feedback", "skill_usage",
+    "skill_files", "team_skills", "team_members", "teams",
+    "org_members", "organizations", "skills", "users",
 ]
 
 

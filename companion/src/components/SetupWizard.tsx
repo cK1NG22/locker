@@ -1,8 +1,8 @@
 import { useState } from "react";
 
-interface Props { token: string; }
+interface Props { token: string; convention?: string; }
 
-export function SetupWizard({ token }: Props) {
+export function SetupWizard({ token, convention = "/l" }: Props) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const serverUrl = window.location.origin;
@@ -38,7 +38,7 @@ export function SetupWizard({ token }: Props) {
               </button>
             </div>
             <div><span className="font-medium text-gray-800">Step 2 —</span> Restart Claude Code.</div>
-            <div><span className="font-medium text-gray-800">Step 3 —</span> Type <code className="bg-gray-100 px-1 rounded">/locker code-review</code> to try a skill.</div>
+            <div><span className="font-medium text-gray-800">Step 3 —</span> Type <code className="bg-gray-100 px-1 rounded">{convention} code-review</code> to try a skill.</div>
           </div>
         </div>
       )}

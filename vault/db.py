@@ -23,11 +23,27 @@ _CREATE_TABLES = [
         created_at  TEXT NOT NULL,
         updated_at  TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS organizations (
+        id                TEXT PRIMARY KEY,
+        name              TEXT NOT NULL,
+        slug              TEXT NOT NULL UNIQUE,
+        owner_id          TEXT NOT NULL,
+        skill_convention  TEXT NOT NULL DEFAULT '/l',
+        created_at        TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS org_members (
+        id          TEXT PRIMARY KEY,
+        org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        user_id     TEXT NOT NULL,
+        role        TEXT NOT NULL DEFAULT 'member',
+        UNIQUE(org_id, user_id)
+    )""",
     """CREATE TABLE IF NOT EXISTS teams (
         id          TEXT PRIMARY KEY,
         name        TEXT NOT NULL UNIQUE,
         token       TEXT NOT NULL UNIQUE,
         owner_id    TEXT,
+        org_id      TEXT REFERENCES organizations(id) ON DELETE SET NULL,
         created_at  TEXT NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS team_members (
@@ -53,6 +69,17 @@ _CREATE_TABLES = [
         created_at  TEXT NOT NULL,
         UNIQUE(skill_id, path)
     )""",
+    """CREATE TABLE IF NOT EXISTS skill_share_requests (
+        id              TEXT PRIMARY KEY,
+        skill_id        TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+        from_team_id    TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+        to_team_id      TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+        requested_by    TEXT NOT NULL,
+        status          TEXT NOT NULL DEFAULT 'pending',
+        created_at      TEXT NOT NULL,
+        resolved_at     TEXT,
+        resolved_by     TEXT
+    )""",
     """CREATE TABLE IF NOT EXISTS skill_usage (
         id          TEXT PRIMARY KEY,
         skill_name  TEXT NOT NULL,
@@ -66,6 +93,7 @@ _CREATE_TABLES = [
         team_id     TEXT,
         feedback_text TEXT NOT NULL,
         status      TEXT NOT NULL DEFAULT 'pending',
+        submitter_team_name TEXT,
         created_at  TEXT NOT NULL
     )""",
 ]

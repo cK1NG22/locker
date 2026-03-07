@@ -9,6 +9,11 @@ import SkillUpload from "./components/skills/SkillUpload";
 import TeamList from "./components/teams/TeamList";
 import TeamDetail from "./components/teams/TeamDetail";
 import TeamForm from "./components/teams/TeamForm";
+import OrgList from "./components/orgs/OrgList";
+import OrgDetailPage from "./components/orgs/OrgDetail";
+import OrgAnalytics from "./components/orgs/OrgAnalytics";
+import ShareRequests from "./components/orgs/ShareRequests";
+import FeedbackList from "./components/feedback/FeedbackList";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
 
@@ -28,6 +33,11 @@ function AuthenticatedApp() {
           <Route path="/teams" element={<TeamList />} />
           <Route path="/teams/new" element={<TeamForm />} />
           <Route path="/teams/:id" element={<TeamDetail />} />
+          <Route path="/feedback" element={<FeedbackList />} />
+          <Route path="/orgs" element={<OrgList />} />
+          <Route path="/orgs/:id" element={<OrgDetailPage />} />
+          <Route path="/orgs/:id/analytics" element={<OrgAnalytics />} />
+          <Route path="/teams/:id/share-requests" element={<ShareRequests />} />
           <Route path="*" element={<Navigate to="/skills" replace />} />
         </Routes>
       </main>

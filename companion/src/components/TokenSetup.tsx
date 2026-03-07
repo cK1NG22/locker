@@ -54,6 +54,17 @@ export default function TokenSetup({ onSubmit, error, initialToken }: TokenSetup
               Connect
             </button>
           </form>
+
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem("locker_onboarding_complete");
+              window.location.reload();
+            }}
+            className="mt-4 w-full text-center text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            What is Locker?
+          </button>
         </div>
       </div>
     </div>
