@@ -39,19 +39,20 @@ _CREATE_TABLES = [
         UNIQUE(org_id, user_id)
     )""",
     """CREATE TABLE IF NOT EXISTS teams (
-        id          TEXT PRIMARY KEY,
-        name        TEXT NOT NULL UNIQUE,
-        token       TEXT NOT NULL UNIQUE,
-        owner_id    TEXT,
-        org_id      TEXT REFERENCES organizations(id) ON DELETE SET NULL,
-        created_at  TEXT NOT NULL
+        id           TEXT PRIMARY KEY,
+        name         TEXT NOT NULL UNIQUE,
+        token_hash   TEXT NOT NULL UNIQUE,
+        token_prefix TEXT NOT NULL,
+        owner_id     TEXT,
+        org_id       TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+        created_at   TEXT NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS team_members (
         id          TEXT PRIMARY KEY,
         team_id     TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
         user_id     TEXT NOT NULL,
         role        TEXT NOT NULL DEFAULT 'member',
-        can_share   INTEGER NOT NULL DEFAULT 0,
+        can_share   BOOLEAN NOT NULL DEFAULT FALSE,
         created_at  TEXT NOT NULL,
         UNIQUE(team_id, user_id)
     )""",
@@ -95,6 +96,15 @@ _CREATE_TABLES = [
         status      TEXT NOT NULL DEFAULT 'pending',
         submitter_team_name TEXT,
         created_at  TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS audit_logs (
+        id              TEXT PRIMARY KEY,
+        actor_id        TEXT NOT NULL,
+        action          TEXT NOT NULL,
+        resource_type   TEXT NOT NULL,
+        resource_id     TEXT,
+        metadata        JSONB,
+        created_at      TEXT NOT NULL
     )""",
 ]
 
