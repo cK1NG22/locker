@@ -56,10 +56,8 @@ export default function TeamDetail() {
   }, [id, getTeam, allSkills]);
 
   useEffect(() => {
-    if (allSkills.length > 0 || !loading) {
-      loadTeam();
-    }
-  }, [loadTeam, allSkills.length, loading]);
+    loadTeam();
+  }, [loadTeam]);
 
   const handleRotateToken = async () => {
     if (!id || !confirm("Rotate this team's token? The old token will stop working immediately.")) return;
@@ -289,6 +287,7 @@ export default function TeamDetail() {
                   type="checkbox"
                   checked={assignedSkillIds.has(skill.id)}
                   onChange={() => toggleSkill(skill.id)}
+                  disabled={savingSkills}
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-sm font-mono text-gray-700">{skill.name}</span>

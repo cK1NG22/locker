@@ -99,6 +99,7 @@ export default function FileSection({
     const reader = new FileReader();
     reader.onload = (ev) => setNewFileContent(ev.target?.result as string);
     reader.readAsText(file);
+    e.target.value = "";
   };
 
   return (

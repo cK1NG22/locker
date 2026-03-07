@@ -126,6 +126,41 @@ async def list_skills(name: Optional[str] = Query(default=None), user: dict = De
     return {"skills": skills}
 
 
+@router.post("/skills/deploy-folder", status_code=201)
+async def deploy_folder(body: SkillFolderDeploy, user: dict = Depends(require_user)):
+    # Create the skill
+    skill_id = str(uuid.uuid4())
+    now = utc_now()
+    encrypted_content = encrypt(body.content)
+    uploaded_by = user["sub"]
+    db = get_db()
+    # Enforce per-user uniqueness for personal skills
+    if body.scope == "personal":
+        dup = await db.fetchrow(
+            "SELECT 1 FROM skills WHERE name = $1 AND scope = 'personal' AND uploaded_by = $2",
+            body.name, uploaded_by,
+        )
+        if dup is not None:
+            raise HTTPException(status_code=409, detail=f"You already have a personal skill named '{body.name}'")
+    async with db.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "INSERT INTO skills (id, name, content, description, visibility, scope, uploaded_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                skill_id, body.name, encrypted_content, body.description, body.visibility, body.scope, uploaded_by, now, now,
+            )
+            # Insert reference files
+            for f in body.files:
+                file_id = str(uuid.uuid4())
+                size_bytes = len(f.content.encode("utf-8"))
+                encrypted_file = encrypt(f.content)
+                await conn.execute(
+                    "INSERT INTO skill_files (id, skill_id, path, content, size_bytes, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+                    file_id, skill_id, f.path, encrypted_file, size_bytes, now,
+                )
+    await audit(db, user["sub"], "skill.deploy", "skill", skill_id, {"name": body.name, "file_count": len(body.files)})
+    return {"id": skill_id, "name": body.name, "scope": body.scope, "file_count": len(body.files), "created_at": now}
+
+
 @router.get("/skills/{skill_id}", response_model=SkillFull)
 async def get_skill(skill_id: str, user: dict = Depends(require_user)):
     db = get_db()
@@ -295,38 +330,3 @@ async def delete_skill_file(skill_id: str, file_id: str, user: dict = Depends(re
         raise HTTPException(status_code=404, detail="File not found")
     await db.execute("DELETE FROM skill_files WHERE id = $1", file_id)
     await audit(db, user["sub"], "skill_file.delete", "skill_file", file_id, {"skill_id": skill_id, "path": row["path"]})
-
-
-@router.post("/skills/deploy-folder", status_code=201)
-async def deploy_folder(body: SkillFolderDeploy, user: dict = Depends(require_user)):
-    # Create the skill
-    skill_id = str(uuid.uuid4())
-    now = utc_now()
-    encrypted_content = encrypt(body.content)
-    uploaded_by = user["sub"]
-    db = get_db()
-    # Enforce per-user uniqueness for personal skills
-    if body.scope == "personal":
-        dup = await db.fetchrow(
-            "SELECT 1 FROM skills WHERE name = $1 AND scope = 'personal' AND uploaded_by = $2",
-            body.name, uploaded_by,
-        )
-        if dup is not None:
-            raise HTTPException(status_code=409, detail=f"You already have a personal skill named '{body.name}'")
-    async with db.acquire() as conn:
-        async with conn.transaction():
-            await conn.execute(
-                "INSERT INTO skills (id, name, content, description, visibility, scope, uploaded_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-                skill_id, body.name, encrypted_content, body.description, body.visibility, body.scope, uploaded_by, now, now,
-            )
-            # Insert reference files
-            for f in body.files:
-                file_id = str(uuid.uuid4())
-                size_bytes = len(f.content.encode("utf-8"))
-                encrypted_file = encrypt(f.content)
-                await conn.execute(
-                    "INSERT INTO skill_files (id, skill_id, path, content, size_bytes, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
-                    file_id, skill_id, f.path, encrypted_file, size_bytes, now,
-                )
-    await audit(db, user["sub"], "skill.deploy", "skill", skill_id, {"name": body.name, "file_count": len(body.files)})
-    return {"id": skill_id, "name": body.name, "scope": body.scope, "file_count": len(body.files), "created_at": now}

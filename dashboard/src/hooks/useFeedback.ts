@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api";
 
 export interface FeedbackItem {
@@ -37,12 +37,21 @@ export function useFeedback() {
     fetchFeedback();
   }, [fetchFeedback]);
 
+  const feedbackRef = useRef(feedback);
+  feedbackRef.current = feedback;
+
   const updateStatus = useCallback(
     async (feedbackId: string, status: "reviewed" | "applied") => {
-      await api.patch(`/api/v1/feedback/${feedbackId}`, { status });
+      const previous = feedbackRef.current;
       setFeedback((prev) =>
         prev.map((f) => (f.id === feedbackId ? { ...f, status } : f))
       );
+      try {
+        await api.patch(`/api/v1/feedback/${feedbackId}`, { status });
+      } catch (e) {
+        setFeedback(previous);
+        throw e;
+      }
     },
     []
   );

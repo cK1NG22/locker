@@ -66,7 +66,7 @@ export default function ShareModal({ skillId, teams, copyToTeam }: ShareModalPro
             </button>
             <button
               type="button"
-              onClick={() => { setShowModal(false); setShareError(null); setShareSuccess(null); }}
+              onClick={() => { setShowModal(false); setShareTeamId(""); setShareError(null); setShareSuccess(null); }}
               className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
             >
               Cancel

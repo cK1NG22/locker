@@ -16,6 +16,7 @@ export default function Login() {
   }, []);
 
   const handleSuccess = async (credentialResponse: { credential?: string }) => {
+    setError(null);
     if (!credentialResponse.credential) {
       setError("No credential received from Google.");
       return;

@@ -66,13 +66,19 @@ export default function SkillUpload() {
                 });
                 resolve();
               };
-              reader.onerror = () => resolve();
+              reader.onerror = () => {
+                console.warn(`Failed to read file: ${path}`);
+                resolve();
+              };
               reader.readAsText(file);
             }),
         ),
       );
 
-      if (results.length === 0) return;
+      if (results.length === 0) {
+        setError("Could not read any of the selected files.");
+        return;
+      }
 
       const cleaned = stripCommonRoot(results);
 
