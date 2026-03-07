@@ -6,7 +6,7 @@ import { useTeams, type TeamSummary } from "../../hooks/useTeams";
 export default function OrgDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getOrg, updateOrg: _updateOrg, deleteOrg, addMember, removeMember, linkTeam, unlinkTeam } = useOrgs();
+  const { getOrg, deleteOrg, addMember, removeMember, linkTeam, unlinkTeam } = useOrgs();
   const { teams: allTeams } = useTeams();
 
   const [org, setOrg] = useState<OrgDetailType | null>(null);
