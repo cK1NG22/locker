@@ -4,7 +4,7 @@ from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 
-from src.auth import require_user
+from vault.auth_deps import require_user
 from vault.db import get_db
 from vault.audit import audit
 from vault.crypto import encrypt, decrypt

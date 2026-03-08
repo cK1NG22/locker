@@ -47,6 +47,14 @@ async def test_missing_auth_header_returns_401(client):
 
 
 @pytest.mark.asyncio
+async def test_x_api_key_allows_access(client, monkeypatch):
+    """X-API-Key header (when LOCKER_API_KEY is set) grants admin access."""
+    monkeypatch.setenv("LOCKER_API_KEY", "test-api-key-12345")
+    r = await client.get("/api/v1/skills", headers={"X-API-Key": "test-api-key-12345"})
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_invalid_token_returns_401(client):
     r = await client.get("/api/v1/skills", headers={"Authorization": "Bearer not-a-real-token"})
     assert r.status_code == 401

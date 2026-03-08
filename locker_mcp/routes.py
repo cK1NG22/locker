@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from src.auth import require_user
+from vault.auth_deps import require_user
 from locker_mcp.token_store import register
 
 router = APIRouter(prefix="/internal")

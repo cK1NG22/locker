@@ -58,6 +58,7 @@ def test_missing_vault_url(tmp_path, monkeypatch):
 def test_missing_jwt_token(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCKER_VAULT_URL", VAULT_URL)
     monkeypatch.delenv("LOCKER_JWT_TOKEN", raising=False)
+    monkeypatch.delenv("LOCKER_API_KEY", raising=False)
 
     skill_file = tmp_path / "test.txt"
     skill_file.write_text("content")
@@ -65,7 +66,7 @@ def test_missing_jwt_token(tmp_path, monkeypatch):
     result = runner.invoke(app, ["deploy", str(skill_file)])
 
     assert result.exit_code == 1
-    assert "LOCKER_JWT_TOKEN" in result.output
+    assert "LOCKER_API_KEY" in result.output or "LOCKER_JWT_TOKEN" in result.output
 
 
 def test_server_returns_409(tmp_path, cli_env):

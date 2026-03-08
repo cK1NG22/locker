@@ -6,22 +6,24 @@ import httpx
 import typer
 
 
-def _get_credentials() -> Tuple[str, str]:
+def _get_credentials() -> Tuple[str, dict]:
     vault_url = os.environ.get("LOCKER_VAULT_URL")
     if not vault_url:
         typer.echo("Error: LOCKER_VAULT_URL environment variable is not set.")
         raise typer.Exit(code=1)
 
+    api_key = os.environ.get("LOCKER_API_KEY")
     jwt_token = os.environ.get("LOCKER_JWT_TOKEN")
-    if not jwt_token:
-        typer.echo("Error: LOCKER_JWT_TOKEN environment variable is not set.")
-        raise typer.Exit(code=1)
-
-    return vault_url, jwt_token
+    if api_key:
+        return vault_url, {"X-API-Key": api_key}
+    if jwt_token:
+        return vault_url, {"Authorization": f"Bearer {jwt_token}"}
+    typer.echo("Error: Set LOCKER_API_KEY or LOCKER_JWT_TOKEN.")
+    raise typer.Exit(code=1)
 
 
 def deploy(file_path: Path, description: Optional[str] = None, visibility: Optional[str] = None) -> None:
-    vault_url, jwt_token = _get_credentials()
+    vault_url, headers = _get_credentials()
 
     if not file_path.exists():
         typer.echo(f"Error: File not found: {file_path}")
@@ -40,7 +42,7 @@ def deploy(file_path: Path, description: Optional[str] = None, visibility: Optio
         r = httpx.post(
             f"{vault_url}/api/v1/skills",
             json=payload,
-            headers={"Authorization": f"Bearer {jwt_token}"},
+            headers=headers,
         )
     except httpx.RequestError as e:
         typer.echo(f"Error: Request failed: {e}")
@@ -59,7 +61,7 @@ def deploy(file_path: Path, description: Optional[str] = None, visibility: Optio
 
 
 def deploy_folder(folder_path: Path, description: Optional[str] = None, visibility: Optional[str] = None) -> None:
-    vault_url, jwt_token = _get_credentials()
+    vault_url, headers = _get_credentials()
 
     if not folder_path.exists():
         typer.echo(f"Error: Folder not found: {folder_path}")
@@ -90,7 +92,7 @@ def deploy_folder(folder_path: Path, description: Optional[str] = None, visibili
         r = httpx.post(
             f"{vault_url}/api/v1/skills/deploy-folder",
             json=payload,
-            headers={"Authorization": f"Bearer {jwt_token}"},
+            headers=headers,
         )
     except httpx.RequestError as e:
         typer.echo(f"Error: Request failed: {e}")

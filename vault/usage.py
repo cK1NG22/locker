@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from src.auth import require_user
+from vault.auth_deps import require_user
 from vault.db import get_db
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])

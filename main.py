@@ -46,6 +46,8 @@ async def health():
     return {"status": "ok", "phase": 3}
 
 
+
+
 UUID_RE = re.compile(r'^[0-9a-f\-]{36}$')
 
 @app.get("/setup/{team_token}", response_class=PlainTextResponse)

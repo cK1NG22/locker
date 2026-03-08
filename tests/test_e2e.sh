@@ -11,7 +11,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PORT=8111
 BASE_URL="http://localhost:$PORT"
 SERVER_PID=""
-TEST_DB=""
+PG_CONTAINER=""
 SYNC_DIR=""
 PASSED=0
 FAILED=0
@@ -26,7 +26,7 @@ cleanup() {
         kill "$SERVER_PID" 2>/dev/null || true
         wait "$SERVER_PID" 2>/dev/null || true
     fi
-    [ -n "$TEST_DB" ] && rm -f "$TEST_DB"
+    [ -n "$PG_CONTAINER" ] && docker rm -f "$PG_CONTAINER" 2>/dev/null || true
     [ -n "$SYNC_DIR" ] && rm -rf "$SYNC_DIR"
 }
 trap cleanup EXIT
@@ -67,27 +67,56 @@ if [ ! -f "$PROJECT_DIR/.venv/bin/locker" ]; then
     exit 1
 fi
 
+if ! command -v docker &>/dev/null; then
+    echo "ERROR: docker is required for E2E (Postgres). Install Docker and ensure it's running."
+    exit 1
+fi
+
 # ── Environment ─────────────────────────────────────────────────────────
 
 export LOCKER_API_KEY="e2e-test-key-$(date +%s)"
 export LOCKER_ENCRYPTION_KEY
 LOCKER_ENCRYPTION_KEY="$(python3 -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())")"
 
-TEST_DB="$(mktemp /tmp/locker_e2e_XXXXXX.db)"
-export LOCKER_DB_PATH="$TEST_DB"
-
 SYNC_DIR="$(mktemp -d /tmp/locker_sync_XXXXXX)"
-
 export LOCKER_VAULT_URL="$BASE_URL"
 
 # Don't need a real Anthropic key for E2E (not testing proxy)
 export ANTHROPIC_API_KEY="sk-ant-fake-for-e2e"
 
+# ── Start Postgres ──────────────────────────────────────────────────────
+
+E2E_PORT=5433
+PG_CONTAINER="locker-e2e-db-$$"
+echo "Starting Postgres container $PG_CONTAINER..."
+docker run -d --name "$PG_CONTAINER" \
+    -e POSTGRES_USER=locker -e POSTGRES_PASSWORD=locker -e POSTGRES_DB=locker \
+    -p "127.0.0.1:$E2E_PORT:5432" \
+    postgres:16-alpine
+export DATABASE_URL="postgresql://locker:locker@127.0.0.1:$E2E_PORT/locker"
+
+# Wait for Postgres to be ready
+for i in $(seq 1 30); do
+    if docker exec "$PG_CONTAINER" pg_isready -U locker -q 2>/dev/null; then
+        break
+    fi
+    if [ "$i" -eq 30 ]; then
+        echo "ERROR: Postgres did not start within 15 seconds."
+        exit 1
+    fi
+    sleep 0.5
+done
+echo "Postgres ready."
+
 # ── Start Server ────────────────────────────────────────────────────────
+
+# Ensure port is free (kill prior run that may not have cleaned up)
+lsof -ti:$PORT 2>/dev/null | xargs kill -9 2>/dev/null || true
+sleep 1
 
 echo "Starting Locker server on port $PORT..."
 cd "$PROJECT_DIR"
-.venv/bin/uvicorn main:app --port "$PORT" --log-level warning &
+.venv/bin/python scripts/run_e2e_server.py "$LOCKER_API_KEY" "$LOCKER_ENCRYPTION_KEY" "$DATABASE_URL" "$PORT" &
 SERVER_PID=$!
 
 # Wait for server to be ready (max 5 seconds)

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.middleware.rate_limit import limiter
 
-from src.auth import require_user
+from vault.auth_deps import require_user
 from vault.audit import audit
 from vault.db import get_db
 from vault.helpers import require_team_token
