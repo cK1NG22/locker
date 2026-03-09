@@ -185,6 +185,23 @@ class SkillCopied(BaseModel):
     created_at: str
 
 
+class MyTeam(BaseModel):
+    team_id: str
+    team_name: str
+    slug: Optional[str] = None
+    role: str
+    can_share: bool
+    skill_count: int
+
+
+class MemberSkill(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    visibility: str
+    content: Optional[str] = None
+
+
 # --- Organization models ---
 
 

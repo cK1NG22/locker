@@ -20,8 +20,10 @@ from vault.models import (
     TeamMemberAdd,
     TeamSkillsSet,
     SkillCopied,
+    MyTeam,
+    MemberSkill,
 )
-from vault.crypto import encrypt
+from vault.crypto import encrypt, decrypt
 from vault.token_utils import generate_token
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
@@ -104,14 +106,46 @@ async def list_teams(user: dict = Depends(require_user)):
     ]
 
 
+@router.get("/me/teams", response_model=list[MyTeam])
+async def my_teams(user: dict = Depends(require_user)):
+    """Return all teams the user belongs to with their role in each."""
+    db = get_db()
+    user_id = user["sub"]
+    rows = await db.fetch(
+        "SELECT t.id, t.name, t.slug, tm.role, tm.can_share, "
+        "COUNT(ts.skill_id) AS skill_count "
+        "FROM team_members tm "
+        "JOIN teams t ON tm.team_id = t.id "
+        "LEFT JOIN team_skills ts ON t.id = ts.team_id "
+        "WHERE tm.user_id = $1 "
+        "GROUP BY t.id, t.name, t.slug, tm.role, tm.can_share",
+        user_id,
+    )
+    return [
+        MyTeam(
+            team_id=r["id"], team_name=r["name"], slug=r["slug"],
+            role=r["role"], can_share=bool(r["can_share"]),
+            skill_count=r["skill_count"],
+        )
+        for r in rows
+    ]
+
+
 @router.get("/teams/{team_id}", response_model=TeamDetail)
-async def get_team(team_id: str):
+async def get_team(team_id: str, user: dict = Depends(require_user)):
     db = get_db()
     row = await db.fetchrow(
         "SELECT id, name, slug, token_prefix, owner_id, created_at FROM teams WHERE id = $1", team_id
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
+    # B4: Verify requesting user is a member
+    member = await db.fetchrow(
+        "SELECT id FROM team_members WHERE team_id = $1 AND user_id = $2",
+        team_id, user["sub"],
+    )
+    if member is None:
+        raise HTTPException(status_code=403, detail="Not a member of this team")
     skill_rows = await db.fetch(
         "SELECT s.name FROM skills s JOIN team_skills ts ON s.id = ts.skill_id WHERE ts.team_id = $1",
         team_id,
@@ -145,6 +179,33 @@ async def get_team(team_id: str):
         skills=skill_names,
         members=members,
     )
+
+
+@router.get("/teams/{team_id}/member-skills", response_model=list[MemberSkill])
+async def get_member_skills(team_id: str, user: dict = Depends(require_user)):
+    """Member skill browsing — returns visible skills for team members."""
+    db = get_db()
+    # Verify membership
+    member = await db.fetchrow(
+        "SELECT id FROM team_members WHERE team_id = $1 AND user_id = $2",
+        team_id, user["sub"],
+    )
+    if member is None:
+        raise HTTPException(status_code=403, detail="Not a member of this team")
+    rows = await db.fetch(
+        "SELECT s.id, s.name, s.description, s.visibility, s.content FROM skills s "
+        "JOIN team_skills ts ON s.id = ts.skill_id "
+        "WHERE ts.team_id = $1 AND s.visibility != 'hidden' AND s.scope = 'team'",
+        team_id,
+    )
+    skills = []
+    for row in rows:
+        content = decrypt(row["content"]) if row["visibility"] == "open" else None
+        skills.append(MemberSkill(
+            id=row["id"], name=row["name"], description=row["description"],
+            visibility=row["visibility"], content=content,
+        ))
+    return skills
 
 
 @router.put("/teams/{team_id}", response_model=TeamOut)

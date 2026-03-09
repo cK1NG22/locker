@@ -90,6 +90,35 @@ async def post_feedback(
     )
 
 
+@router.post("/teams/{team_id}/skills/{skill_id}/feedback", status_code=201)
+async def post_member_feedback(
+    team_id: str,
+    skill_id: str,
+    body: FeedbackBody,
+    user: dict = Depends(require_user),
+):
+    """JWT-authenticated feedback submission for team members."""
+    db = get_db()
+    # Verify membership
+    member = await db.fetchrow(
+        "SELECT id FROM team_members WHERE team_id = $1 AND user_id = $2",
+        team_id, user["sub"],
+    )
+    if member is None:
+        raise HTTPException(status_code=403, detail="Not a member of this team")
+    # Verify skill exists
+    skill = await db.fetchrow("SELECT id FROM skills WHERE id = $1", skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    # Get team name for submitter info
+    team = await db.fetchrow("SELECT name FROM teams WHERE id = $1", team_id)
+    return await submit_feedback(
+        db, skill_id, body.feedback_text,
+        team_id=team_id,
+        submitter_team_name=team["name"] if team else None,
+    )
+
+
 @router.get("/feedback", dependencies=[Depends(require_user)])
 async def get_feedback(
     status: Optional[str] = Query(None),

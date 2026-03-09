@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "@/context/AuthContext";
 import { API_URL } from "@/lib/constants";
@@ -20,6 +21,7 @@ interface JoinResult {
 }
 
 export default function InvitePage({ slug }: { slug: string }) {
+  const router = useRouter();
   const { token, loginWithGoogle } = useAuth();
   const [teamInfo, setTeamInfo] = useState<TeamInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,6 +157,13 @@ export default function InvitePage({ slug }: { slug: string }) {
                 </ul>
               </div>
             </div>
+
+            <button
+              onClick={() => router.push(`/dashboard?team=${joinResult.team_id}`)}
+              className="mt-4 w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Go to Dashboard
+            </button>
           </div>
         </div>
       </div>
