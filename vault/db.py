@@ -150,6 +150,22 @@ async def init_db() -> None:
     async with _pool.acquire() as conn:
         for stmt in _CREATE_TABLES:
             await conn.execute(stmt)
+        # One-time migrations for existing tables
+        await conn.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS slug TEXT UNIQUE")
+        await conn.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS token_encrypted TEXT")
+        # Backfill slugs for teams that don't have one
+        import re
+        rows = await conn.fetch("SELECT id, name FROM teams WHERE slug IS NULL")
+        for row in rows:
+            slug = re.sub(r'-+', '-', re.sub(r'[\s]+', '-', re.sub(r'[^a-z0-9\s-]', '', row["name"].lower().strip()))).strip('-')
+            counter = 0
+            while True:
+                candidate = slug if counter == 0 else f"{slug}-{counter}"
+                existing = await conn.fetchval("SELECT 1 FROM teams WHERE slug = $1", candidate)
+                if not existing:
+                    await conn.execute("UPDATE teams SET slug = $1 WHERE id = $2", candidate, row["id"])
+                    break
+                counter += 1
 
 
 async def close_db() -> None:
