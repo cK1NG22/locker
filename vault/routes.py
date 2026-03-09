@@ -34,6 +34,7 @@ async def create_skill(body: SkillCreate, user: dict = Depends(require_user)):
     encrypted = encrypt(body.content)
     uploaded_by = user["sub"]
     db = get_db()
+
     # Enforce per-user uniqueness for personal skills
     if body.scope == "personal":
         dup = await db.fetchrow(

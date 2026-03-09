@@ -41,7 +41,7 @@ _INSTRUCTIONS = (
 
 
 def _vault_url() -> str:
-    return os.environ.get("LOCKER_VAULT_URL", "http://localhost:8000")
+    return os.environ.get("LOCKER_VAULT_URL", "http://localhost:8080")
 
 
 def _api_key() -> str:

@@ -18,4 +18,5 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-fake-for-e2e")
 assert os.environ.get("LOCKER_API_KEY"), "LOCKER_API_KEY must be set"
 
 import uvicorn
+
 uvicorn.run("main:app", host="0.0.0.0", port=int(sys.argv[4]), log_level="warning")

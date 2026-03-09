@@ -143,6 +143,7 @@ _CREATE_TABLES = [
 async def init_db() -> None:
     global _pool
     dsn = os.environ.get("DATABASE_URL", "postgresql://localhost/locker")
+
     _pool = await asyncpg.create_pool(dsn, min_size=2, max_size=10)
     async with _pool.acquire() as conn:
         for stmt in _CREATE_TABLES:

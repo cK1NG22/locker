@@ -14,6 +14,7 @@ async def require_user(
 ) -> dict:
     """Accept X-API-Key or Bearer JWT for admin routes."""
     api_key = os.environ.get("LOCKER_API_KEY")
+
     if api_key and x_api_key and x_api_key == api_key:
         return {"sub": "api-key", "email": "api-key@locker.local"}
     return await _require_jwt(authorization=authorization)

@@ -52,6 +52,7 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
     now = utc_now()
     user_id = user["sub"]
     db = get_db()
+
     async with db.acquire() as conn:
         async with conn.transaction():
             try:
