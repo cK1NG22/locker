@@ -751,12 +751,17 @@ async def test_copy_without_can_share_in_target_team_rejected(client):
 @pytest.mark.asyncio
 async def test_copy_duplicate_name_in_target_team_rejected(client):
     skill = await _create_skill_full(client, "dup-name-skill", scope="team", visibility="open")
-    await _create_skill_full(client, "dup-name-skill-copy", scope="team", visibility="open")
     source_team = await _create_team(client, "Dup Source Team")
     target_team = await _create_team(client, "Dup Target Team")
     await _assign_skill_to_team(client, source_team["id"], skill["id"])
-    same_name_skill = await _create_skill_full(client, "dup-name-skill", scope="team", visibility="open")
+    # Create a skill with a temp name, assign to target team, then rename to conflict
+    same_name_skill = await _create_skill_full(client, "dup-name-skill-temp", scope="team", visibility="open")
     await _assign_skill_to_team(client, target_team["id"], same_name_skill["id"])
+    await client.put(
+        f"/api/v1/skills/{same_name_skill['id']}",
+        json={"name": "dup-name-skill"},
+        headers=HEADERS,
+    )
     r = await client.post(
         f"/api/v1/skills/{skill['id']}/copy-to-team/{target_team['id']}",
         headers=HEADERS,
@@ -855,14 +860,24 @@ async def test_rotate_token_missing_team_404(client):
 
 
 @pytest.mark.asyncio
-async def test_same_skill_name_allowed_in_different_teams(client):
-    skill1 = await _create_skill_full(client, "shared-name-skill", scope="team", visibility="open")
-    skill2 = await _create_skill_full(client, "shared-name-skill", scope="team", visibility="open")
-    team1 = await _create_team(client, "Name Team 1")
-    team2 = await _create_team(client, "Name Team 2")
-    await _assign_skill_to_team(client, team1["id"], skill1["id"])
-    await _assign_skill_to_team(client, team2["id"], skill2["id"])
-    detail1 = await client.get(f"/api/v1/teams/{team1['id']}", headers=HEADERS)
-    detail2 = await client.get(f"/api/v1/teams/{team2['id']}", headers=HEADERS)
-    assert "shared-name-skill" in detail1.json()["skills"]
-    assert "shared-name-skill" in detail2.json()["skills"]
+async def test_duplicate_team_skill_name_returns_409(client):
+    await _create_skill_full(client, "shared-name-skill", scope="team", visibility="open")
+    r = await client.post(
+        "/api/v1/skills",
+        json={"name": "shared-name-skill", "content": "new content", "scope": "team"},
+        headers=HEADERS,
+    )
+    assert r.status_code == 409
+    assert r.json()["existing_skill_id"]
+
+
+@pytest.mark.asyncio
+async def test_duplicate_team_skill_name_replace(client):
+    skill1 = await _create_skill_full(client, "replace-me-skill", scope="team", visibility="open")
+    r = await client.post(
+        "/api/v1/skills",
+        json={"name": "replace-me-skill", "content": "new content", "scope": "team", "replace_skill_id": skill1["id"]},
+        headers=HEADERS,
+    )
+    assert r.status_code == 201
+    assert r.json()["id"] != skill1["id"]

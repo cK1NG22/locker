@@ -56,7 +56,7 @@ export function useSkills() {
   }, []);
 
   const createSkill = useCallback(
-    async (body: { name: string; content: string; description?: string; scope?: string }) => {
+    async (body: { name: string; content: string; description?: string; scope?: string; replace_skill_id?: string }) => {
       const result = await api.post<{ id: string }>("/api/v1/skills", body);
       await refresh();
       return result;
@@ -118,6 +118,7 @@ export function useSkills() {
       description?: string;
       scope?: string;
       files: { path: string; content: string }[];
+      replace_skill_id?: string;
     }) => {
       const result = await api.post<{ id: string }>("/api/v1/skills/deploy-folder", body);
       await refresh();

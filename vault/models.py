@@ -11,6 +11,7 @@ class SkillCreate(BaseModel):
     description: Optional[str] = None
     visibility: Visibility = "open"
     scope: Scope = "team"
+    replace_skill_id: Optional[str] = None
 
 
 class SkillUpdate(BaseModel):
@@ -170,6 +171,7 @@ class SkillFolderDeploy(BaseModel):
     visibility: Visibility = "open"
     scope: Scope = "team"
     files: List[SkillFileCreate]
+    replace_skill_id: Optional[str] = None
 
 
 class SkillCopied(BaseModel):

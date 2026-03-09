@@ -2,6 +2,7 @@ import uuid
 
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from typing import Optional
 
 from vault.auth_deps import require_user
@@ -41,10 +42,36 @@ async def create_skill(body: SkillCreate, user: dict = Depends(require_user)):
         )
         if dup is not None:
             raise HTTPException(status_code=409, detail=f"You already have a personal skill named '{body.name}'")
+    # Enforce name uniqueness for team skills
+    replaced_team_ids: list[str] = []
+    if body.scope == "team":
+        dup = await db.fetchrow(
+            "SELECT id FROM skills WHERE name = $1 AND scope = 'team'",
+            body.name,
+        )
+        if dup is not None:
+            if body.replace_skill_id and body.replace_skill_id == dup["id"]:
+                # Save team links before deleting (CASCADE will remove them)
+                team_rows = await db.fetch(
+                    "SELECT team_id FROM team_skills WHERE skill_id = $1", dup["id"],
+                )
+                replaced_team_ids = [r["team_id"] for r in team_rows]
+                await db.execute("DELETE FROM skills WHERE id = $1", dup["id"])
+                await audit(db, user["sub"], "skill.replace", "skill", dup["id"], {"name": body.name})
+            else:
+                return JSONResponse(
+                    status_code=409,
+                    content={"detail": f"A team skill named '{body.name}' already exists", "existing_skill_id": dup["id"]},
+                )
     await db.execute(
         "INSERT INTO skills (id, name, content, description, visibility, scope, uploaded_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
         skill_id, body.name, encrypted, body.description, body.visibility, body.scope, uploaded_by, now, now,
     )
+    # Re-link to the same teams the old skill belonged to
+    for team_id in replaced_team_ids:
+        await db.execute(
+            "INSERT INTO team_skills (team_id, skill_id) VALUES ($1, $2)", team_id, skill_id,
+        )
     await audit(db, user["sub"], "skill.create", "skill", skill_id, {"name": body.name, "scope": body.scope, "visibility": body.visibility})
     return SkillCreated(id=skill_id, name=body.name, visibility=body.visibility, scope=body.scope, created_at=now)
 
@@ -142,6 +169,27 @@ async def deploy_folder(body: SkillFolderDeploy, user: dict = Depends(require_us
         )
         if dup is not None:
             raise HTTPException(status_code=409, detail=f"You already have a personal skill named '{body.name}'")
+    # Enforce name uniqueness for team skills
+    replaced_team_ids: list[str] = []
+    if body.scope == "team":
+        dup = await db.fetchrow(
+            "SELECT id FROM skills WHERE name = $1 AND scope = 'team'",
+            body.name,
+        )
+        if dup is not None:
+            if body.replace_skill_id and body.replace_skill_id == dup["id"]:
+                # Save team links before deleting (CASCADE will remove them)
+                team_rows = await db.fetch(
+                    "SELECT team_id FROM team_skills WHERE skill_id = $1", dup["id"],
+                )
+                replaced_team_ids = [r["team_id"] for r in team_rows]
+                await db.execute("DELETE FROM skills WHERE id = $1", dup["id"])
+                await audit(db, user["sub"], "skill.replace", "skill", dup["id"], {"name": body.name})
+            else:
+                return JSONResponse(
+                    status_code=409,
+                    content={"detail": f"A team skill named '{body.name}' already exists", "existing_skill_id": dup["id"]},
+                )
     async with db.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
@@ -157,6 +205,11 @@ async def deploy_folder(body: SkillFolderDeploy, user: dict = Depends(require_us
                     "INSERT INTO skill_files (id, skill_id, path, content, size_bytes, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
                     file_id, skill_id, f.path, encrypted_file, size_bytes, now,
                 )
+    # Re-link to the same teams the old skill belonged to
+    for team_id in replaced_team_ids:
+        await db.execute(
+            "INSERT INTO team_skills (team_id, skill_id) VALUES ($1, $2)", team_id, skill_id,
+        )
     await audit(db, user["sub"], "skill.deploy", "skill", skill_id, {"name": body.name, "file_count": len(body.files)})
     return {"id": skill_id, "name": body.name, "scope": body.scope, "file_count": len(body.files), "created_at": now}
 

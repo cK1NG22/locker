@@ -36,6 +36,7 @@ export default function SkillUpload() {
   const [dragging, setDragging] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [replacePrompt, setReplacePrompt] = useState<{ skillName: string; existingId: string } | null>(null);
 
   // Keep ref in sync so readFileObjects doesn't depend on name
   nameRef.current = name;
@@ -167,8 +168,7 @@ export default function SkillUpload() {
     setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const doUpload = async (replaceSkillId?: string) => {
     const trimmedName = name.trim();
     if (!trimmedName || files.length === 0) return;
 
@@ -177,12 +177,14 @@ export default function SkillUpload() {
 
     setSaving(true);
     setError(null);
+    setReplacePrompt(null);
 
     const payload = {
       name: trimmedName,
       content: mainFile.content,
       description: description.trim() || undefined,
       scope,
+      replace_skill_id: replaceSkillId,
     };
 
     try {
@@ -197,11 +199,20 @@ export default function SkillUpload() {
         });
       }
       navigate("/skills");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed");
+    } catch (e: any) {
+      if (e.status === 409 && e.body?.existing_skill_id) {
+        setReplacePrompt({ skillName: trimmedName, existingId: e.body.existing_skill_id });
+      } else {
+        setError(e instanceof Error ? e.message : "Upload failed");
+      }
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await doUpload();
   };
 
   return (
@@ -354,6 +365,31 @@ export default function SkillUpload() {
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+
+        {replacePrompt && (
+          <div className="border border-amber-300 bg-amber-50 rounded-lg p-4 space-y-3">
+            <p className="text-sm text-gray-800">
+              A team skill named <span className="font-semibold">"{replacePrompt.skillName}"</span> already exists. Replace it with the new version?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => doUpload(replacePrompt.existingId)}
+                disabled={saving}
+                className="flex-1 py-2 px-4 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                {saving ? "Replacing..." : "Replace"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setReplacePrompt(null)}
+                className="flex-1 py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

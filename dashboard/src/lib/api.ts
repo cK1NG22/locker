@@ -43,7 +43,10 @@ async function request<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `Request failed (${res.status})`);
+    const err = new Error(body.detail || `Request failed (${res.status})`);
+    (err as any).status = res.status;
+    (err as any).body = body;
+    throw err;
   }
 
   return res.json();
