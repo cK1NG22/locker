@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 export default function SetupPage() {
   const { activeTeam, loading: teamLoading } = useTeamContext();
   const [setupCommand, setSetupCommand] = useState<string | null>(null);
+  const [convention, setConvention] = useState("/locker");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -15,8 +16,11 @@ export default function SetupPage() {
     if (teamLoading || !activeTeam?.slug) return;
     setLoading(true);
     api
-      .get<{ setup_command: string }>(`/api/v1/invite/${activeTeam.slug}/setup`)
-      .then((data) => setSetupCommand(data.setup_command))
+      .get<{ setup_command: string; convention: string }>(`/api/v1/invite/${activeTeam.slug}/setup`)
+      .then((data) => {
+        setSetupCommand(data.setup_command);
+        setConvention(data.convention);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load setup"))
       .finally(() => setLoading(false));
   }, [activeTeam?.slug, teamLoading]);
@@ -71,7 +75,7 @@ export default function SetupPage() {
           <p>
             Type{" "}
             <code className="bg-gray-200 px-1.5 py-0.5 rounded text-gray-800">
-              /locker list_skills
+              {convention} list_skills
             </code>{" "}
             to see your team&apos;s skills.
           </p>

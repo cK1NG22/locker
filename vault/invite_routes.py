@@ -38,6 +38,19 @@ async def get_invite_info(slug: str):
     }
 
 
+async def _get_convention(db, team_id: str) -> str:
+    """Look up the org skill convention for a team, defaulting to /locker."""
+    team_row = await db.fetchrow("SELECT org_id FROM teams WHERE id = $1", team_id)
+    if team_row and team_row["org_id"]:
+        org_row = await db.fetchrow(
+            "SELECT skill_convention FROM organizations WHERE id = $1",
+            team_row["org_id"],
+        )
+        if org_row:
+            return org_row["skill_convention"]
+    return "/locker"
+
+
 @router.post("/{slug}/join")
 async def join_team(slug: str, user: dict = Depends(require_user)):
     """Requires Bearer JWT. Adds user to team, returns setup info."""
@@ -62,12 +75,15 @@ async def join_team(slug: str, user: dict = Depends(require_user)):
         token = decrypt(row["token_encrypted"])
         setup_command = f"curl -fsSL {_BASE_URL}/setup/{token} | bash"
 
+    convention = await _get_convention(db, team_id)
+
     if existing:
         # Already a member — still return setup info (409 with data)
         return {
             "team_id": team_id,
             "team_name": row["name"],
             "setup_command": setup_command,
+            "convention": convention,
             "already_member": True,
         }
 
@@ -84,6 +100,7 @@ async def join_team(slug: str, user: dict = Depends(require_user)):
         "team_id": team_id,
         "team_name": row["name"],
         "setup_command": setup_command,
+        "convention": convention,
         "already_member": False,
     }
 
@@ -110,6 +127,8 @@ async def get_setup_command(slug: str, user: dict = Depends(require_user)):
         raise HTTPException(status_code=404, detail="Team token not available — ask a team admin to rotate the token")
 
     token = decrypt(row["token_encrypted"])
+    convention = await _get_convention(db, row["id"])
     return {
         "setup_command": f"curl -fsSL {_BASE_URL}/setup/{token} | bash",
+        "convention": convention,
     }

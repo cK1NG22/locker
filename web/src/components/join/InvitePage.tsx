@@ -17,6 +17,7 @@ interface JoinResult {
   team_id: string;
   team_name: string;
   setup_command: string | null;
+  convention: string;
   already_member: boolean;
 }
 
@@ -145,7 +146,7 @@ export default function InvitePage({ slug }: { slug: string }) {
 
               <div className="text-sm text-gray-600 space-y-2">
                 <p>2. Restart Claude Code.</p>
-                <p>3. Type <code className="bg-gray-200 px-1.5 py-0.5 rounded text-gray-800">/locker list_skills</code> to see your team&apos;s skills.</p>
+                <p>3. Type <code className="bg-gray-200 px-1.5 py-0.5 rounded text-gray-800">{joinResult.convention} list_skills</code> to see your team&apos;s skills.</p>
               </div>
 
               <div className="text-xs text-gray-400 border-t border-gray-200 pt-3">

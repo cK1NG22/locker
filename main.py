@@ -8,7 +8,8 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from src.middleware.rate_limit import limiter, rate_limit_exceeded_handler
-from vault.db import init_db, close_db
+from vault.db import init_db, close_db, get_db
+from vault.token_utils import hash_token
 from src.auth.oauth import router as auth_router
 from vault.routes import router as vault_router
 from vault.team_routes import router as team_router
@@ -81,6 +82,20 @@ async def setup_script(team_token: str, request: Request):
         return PlainTextResponse("Invalid token format.", status_code=400)
     server_url = str(request.base_url).rstrip("/")
     skill_router_url = "https://raw.githubusercontent.com/ck22coding/locker-skill/main/locker.md"
+    # Look up org convention for this team
+    convention = "/locker"
+    db = get_db()
+    token_hash = hash_token(team_token)
+    team_row = await db.fetchrow(
+        "SELECT org_id FROM teams WHERE token_hash = $1", token_hash
+    )
+    if team_row and team_row["org_id"]:
+        org_row = await db.fetchrow(
+            "SELECT skill_convention FROM organizations WHERE id = $1",
+            team_row["org_id"],
+        )
+        if org_row:
+            convention = org_row["skill_convention"]
     script = f"""#!/bin/bash
 set -e
 echo "Setting up Locker..."
@@ -100,7 +115,7 @@ mkdir -p ~/.claude/commands
 curl -fsSL {skill_router_url} -o ~/.claude/commands/locker.md
 echo "Skill router installed."
 echo ""
-echo "Done! Restart Claude Code, then try: /locker code-review"
+echo "Done! Restart Claude Code, then try: {convention} list_skills"
 """
     return PlainTextResponse(script, media_type="text/plain")
 
