@@ -106,6 +106,37 @@ _CREATE_TABLES = [
         metadata        JSONB,
         created_at      TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS oauth_clients (
+        client_id         TEXT PRIMARY KEY,
+        client_secret_hash TEXT,
+        client_info_json  TEXT NOT NULL,
+        created_at        TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS oauth_codes (
+        code              TEXT PRIMARY KEY,
+        client_id         TEXT NOT NULL,
+        user_id           TEXT NOT NULL,
+        team_id           TEXT NOT NULL,
+        scopes            TEXT NOT NULL,
+        code_challenge    TEXT NOT NULL,
+        redirect_uri      TEXT NOT NULL,
+        redirect_uri_provided_explicitly BOOLEAN NOT NULL DEFAULT TRUE,
+        resource          TEXT,
+        expires_at        DOUBLE PRECISION NOT NULL,
+        created_at        TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS oauth_tokens (
+        token_hash        TEXT PRIMARY KEY,
+        token_type        TEXT NOT NULL,
+        client_id         TEXT NOT NULL,
+        user_id           TEXT NOT NULL,
+        team_id           TEXT NOT NULL,
+        scopes            TEXT NOT NULL,
+        resource          TEXT,
+        expires_at        DOUBLE PRECISION,
+        created_at        TEXT NOT NULL,
+        revoked           BOOLEAN NOT NULL DEFAULT FALSE
+    )""",
 ]
 
 

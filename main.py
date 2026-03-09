@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from slowapi.errors import RateLimitExceeded
@@ -23,7 +23,8 @@ from vault.share_routes import router as share_router
 from vault.audit import router as audit_router
 from proxy.routes import router as proxy_router
 from locker_mcp.routes import router as mcp_router
-from locker_mcp.sse_server import mcp_routes
+from locker_mcp.sse_server import mcp_routes, mcp_v2
+from locker_mcp.consent import router as consent_router
 
 
 
@@ -46,6 +47,19 @@ async def health():
     return {"status": "ok", "phase": 3}
 
 
+# --- OAuth Protected Resource Metadata (RFC 9728) ---
+
+_BASE_URL = os.environ.get("LOCKER_BASE_URL", "https://locker.up.railway.app")
+
+
+@app.get("/.well-known/oauth-protected-resource")
+@limiter.exempt
+async def oauth_protected_resource():
+    return JSONResponse({
+        "resource": f"{_BASE_URL}/mcp/v2",
+        "authorization_servers": [f"{_BASE_URL}/mcp/v2"],
+        "bearer_methods_supported": ["header"],
+    })
 
 
 UUID_RE = re.compile(r'^[0-9a-f\-]{36}$')
@@ -92,6 +106,10 @@ app.include_router(org_router)
 app.include_router(share_router)
 app.include_router(proxy_router)
 app.include_router(mcp_router)
+app.include_router(consent_router)
+
+# Mount OAuth-protected FastMCP at /mcp/v2
+app.mount("/mcp/v2", mcp_v2.sse_app())
 
 # Serve companion page static files if the build output exists
 _companion_dir = Path(os.environ.get("LOCKER_STATIC_DIR", "./static/companion"))
