@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from asyncpg import UniqueViolationError
@@ -20,9 +21,19 @@ from vault.models import (
     TeamSkillsSet,
     SkillCopied,
 )
+from vault.crypto import encrypt
 from vault.token_utils import generate_token
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
+
+
+def slugify(name: str) -> str:
+    """Convert team name to URL-friendly slug."""
+    slug = name.lower().strip()
+    slug = re.sub(r'[^a-z0-9\s-]', '', slug)
+    slug = re.sub(r'[\s]+', '-', slug)
+    slug = re.sub(r'-+', '-', slug)
+    return slug.strip('-')
 
 
 async def _require_team_share(team_id: str, user_id: str) -> None:
@@ -49,6 +60,8 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
     team_id = str(uuid.uuid4())
     member_id = str(uuid.uuid4())
     plaintext, token_hash, token_prefix = generate_token()
+    token_enc = encrypt(plaintext)
+    slug = slugify(body.name)
     now = utc_now()
     user_id = user["sub"]
     db = get_db()
@@ -57,8 +70,8 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
         async with conn.transaction():
             try:
                 await conn.execute(
-                    "INSERT INTO teams (id, name, token_hash, token_prefix, owner_id, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
-                    team_id, body.name, token_hash, token_prefix, user_id, now,
+                    "INSERT INTO teams (id, name, slug, token_hash, token_prefix, token_encrypted, owner_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                    team_id, body.name, slug, token_hash, token_prefix, token_enc, user_id, now,
                 )
             except UniqueViolationError:
                 raise HTTPException(status_code=409, detail=f"Team '{body.name}' already exists")
@@ -67,7 +80,7 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
                 member_id, team_id, user_id, "admin", True, now,
             )
     await audit(db, user["sub"], "team.create", "team", team_id, {"name": body.name})
-    return TeamCreated(id=team_id, name=body.name, token=plaintext, token_prefix=token_prefix, owner_id=user_id, created_at=now)
+    return TeamCreated(id=team_id, name=body.name, slug=slug, token=plaintext, token_prefix=token_prefix, owner_id=user_id, created_at=now)
 
 
 @router.get("/teams", response_model=list[TeamSummary])
@@ -75,18 +88,18 @@ async def list_teams(user: dict = Depends(require_user)):
     db = get_db()
     user_id = user["sub"]
     rows = await db.fetch(
-        "SELECT t.id, t.name, COUNT(ts.skill_id) AS skill_count "
+        "SELECT t.id, t.name, t.slug, COUNT(ts.skill_id) AS skill_count "
         "FROM teams t LEFT JOIN team_skills ts ON t.id = ts.team_id "
         "WHERE t.id IN ("
         "  SELECT tm.team_id FROM team_members tm WHERE tm.user_id = $1"
         "  UNION"
         "  SELECT t2.id FROM teams t2 JOIN org_members om ON t2.org_id = om.org_id WHERE om.user_id = $1"
         ") "
-        "GROUP BY t.id, t.name",
+        "GROUP BY t.id, t.name, t.slug",
         user_id,
     )
     return [
-        TeamSummary(id=row["id"], name=row["name"], skill_count=row["skill_count"])
+        TeamSummary(id=row["id"], name=row["name"], slug=row["slug"], skill_count=row["skill_count"])
         for row in rows
     ]
 
@@ -95,7 +108,7 @@ async def list_teams(user: dict = Depends(require_user)):
 async def get_team(team_id: str):
     db = get_db()
     row = await db.fetchrow(
-        "SELECT id, name, token_prefix, owner_id, created_at FROM teams WHERE id = $1", team_id
+        "SELECT id, name, slug, token_prefix, owner_id, created_at FROM teams WHERE id = $1", team_id
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -125,6 +138,7 @@ async def get_team(team_id: str):
     return TeamDetail(
         id=row["id"],
         name=row["name"],
+        slug=row["slug"],
         token_prefix=row["token_prefix"],
         owner_id=row["owner_id"],
         created_at=row["created_at"],
@@ -142,15 +156,16 @@ async def update_team(team_id: str, body: TeamUpdate, user: dict = Depends(requi
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
+    slug = slugify(body.name)
     try:
         await db.execute(
-            "UPDATE teams SET name = $1 WHERE id = $2", body.name, team_id
+            "UPDATE teams SET name = $1, slug = $2 WHERE id = $3", body.name, slug, team_id
         )
     except UniqueViolationError:
         raise HTTPException(status_code=409, detail=f"Team '{body.name}' already exists")
     await audit(db, user["sub"], "team.update", "team", team_id, {"name": body.name})
     return TeamOut(
-        id=row["id"], name=body.name, token_prefix=row["token_prefix"], owner_id=row["owner_id"], created_at=row["created_at"]
+        id=row["id"], name=body.name, slug=slug, token_prefix=row["token_prefix"], owner_id=row["owner_id"], created_at=row["created_at"]
     )
 
 
@@ -167,17 +182,18 @@ async def rotate_token(team_id: str, user: dict = Depends(require_user)):
     await require_team_admin(team_id, user["sub"])
     db = get_db()
     row = await db.fetchrow(
-        "SELECT id, name, owner_id, created_at FROM teams WHERE id = $1", team_id
+        "SELECT id, name, slug, owner_id, created_at FROM teams WHERE id = $1", team_id
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
     plaintext, token_hash, token_prefix = generate_token()
+    token_enc = encrypt(plaintext)
     await db.execute(
-        "UPDATE teams SET token_hash = $1, token_prefix = $2 WHERE id = $3",
-        token_hash, token_prefix, team_id,
+        "UPDATE teams SET token_hash = $1, token_prefix = $2, token_encrypted = $3 WHERE id = $4",
+        token_hash, token_prefix, token_enc, team_id,
     )
     return TeamCreated(
-        id=row["id"], name=row["name"], token=plaintext, token_prefix=token_prefix,
+        id=row["id"], name=row["name"], slug=row["slug"], token=plaintext, token_prefix=token_prefix,
         owner_id=row["owner_id"], created_at=row["created_at"],
     )
 

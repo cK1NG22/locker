@@ -41,8 +41,10 @@ _CREATE_TABLES = [
     """CREATE TABLE IF NOT EXISTS teams (
         id           TEXT PRIMARY KEY,
         name         TEXT NOT NULL UNIQUE,
+        slug         TEXT UNIQUE,
         token_hash   TEXT NOT NULL UNIQUE,
         token_prefix TEXT NOT NULL,
+        token_encrypted TEXT,
         owner_id     TEXT,
         org_id       TEXT REFERENCES organizations(id) ON DELETE SET NULL,
         created_at   TEXT NOT NULL

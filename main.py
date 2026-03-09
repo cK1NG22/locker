@@ -1,11 +1,8 @@
 import os
 import re
 from contextlib import asynccontextmanager
-from pathlib import Path
-
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
-from fastapi.staticfiles import StaticFiles
 
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -20,11 +17,13 @@ from vault.usage import router as usage_router
 from vault.feedback import router as feedback_router
 from vault.org_routes import router as org_router
 from vault.share_routes import router as share_router
+from vault.invite_routes import router as invite_router
 from vault.audit import router as audit_router
 from proxy.routes import router as proxy_router
 from locker_mcp.routes import router as mcp_router
 from locker_mcp.sse_server import mcp_routes, mcp_v2
 from locker_mcp.consent import router as consent_router
+from fastapi.middleware.cors import CORSMiddleware
 
 
 
@@ -39,6 +38,17 @@ app = FastAPI(title="Locker", lifespan=lifespan, routes=mcp_routes)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+# CORS for frontend on Vercel
+_cors_origins = [o.strip() for o in os.environ.get("LOCKER_CORS_ORIGINS", "").split(",") if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 @app.get("/health")
@@ -104,19 +114,10 @@ app.include_router(feedback_router)
 app.include_router(audit_router)
 app.include_router(org_router)
 app.include_router(share_router)
+app.include_router(invite_router)
 app.include_router(proxy_router)
 app.include_router(mcp_router)
 app.include_router(consent_router)
 
 # Mount OAuth-protected FastMCP at /mcp/v2
 app.mount("/mcp/v2", mcp_v2.sse_app())
-
-# Serve companion page static files if the build output exists
-_companion_dir = Path(os.environ.get("LOCKER_STATIC_DIR", "./static/companion"))
-if _companion_dir.is_dir():
-    app.mount("/companion", StaticFiles(directory=str(_companion_dir), html=True), name="companion")
-
-# Serve admin dashboard static files if the build output exists
-_dashboard_dir = Path(os.environ.get("LOCKER_DASHBOARD_DIR", "./static/dashboard"))
-if _dashboard_dir.is_dir():
-    app.mount("/dashboard", StaticFiles(directory=str(_dashboard_dir), html=True), name="dashboard")

@@ -104,6 +104,7 @@ class TeamMemberAdd(BaseModel):
 class TeamOut(BaseModel):
     id: str
     name: str
+    slug: Optional[str] = None
     token_prefix: str
     owner_id: Optional[str] = None
     created_at: str
@@ -112,6 +113,7 @@ class TeamOut(BaseModel):
 class TeamCreated(BaseModel):
     id: str
     name: str
+    slug: Optional[str] = None
     token: str
     token_prefix: str
     owner_id: Optional[str] = None
@@ -121,12 +123,14 @@ class TeamCreated(BaseModel):
 class TeamSummary(BaseModel):
     id: str
     name: str
+    slug: Optional[str] = None
     skill_count: int
 
 
 class TeamDetail(BaseModel):
     id: str
     name: str
+    slug: Optional[str] = None
     token_prefix: str
     owner_id: Optional[str] = None
     created_at: str
