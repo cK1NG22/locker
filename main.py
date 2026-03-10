@@ -57,12 +57,13 @@ async def health():
     return {"status": "ok", "phase": 3}
 
 
-# --- OAuth Protected Resource Metadata (RFC 9728) ---
+# --- OAuth Protected Resource Metadata (RFC 9728 §3.1) ---
+# Scoped to /mcp/v2 so legacy /mcp clients (X-Team-Token auth) don't discover OAuth metadata
 
 _BASE_URL = os.environ.get("LOCKER_BASE_URL", "https://locker.up.railway.app")
 
 
-@app.get("/.well-known/oauth-protected-resource")
+@app.get("/.well-known/oauth-protected-resource/mcp/v2")
 @limiter.exempt
 async def oauth_protected_resource():
     return JSONResponse({

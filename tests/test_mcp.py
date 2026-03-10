@@ -281,3 +281,25 @@ async def test_list_skills_no_token_configured(client):
         result = await call_tool("list_skills", {})
 
     assert "LOCKER_TEAM_TOKEN" in result[0].text
+
+
+# --- OAuth protected resource metadata scoping regression tests ---
+
+
+@pytest.mark.asyncio
+async def test_root_well_known_returns_404(client):
+    """Root /.well-known/oauth-protected-resource must NOT exist,
+    otherwise legacy /mcp clients discover OAuth metadata and fail."""
+    r = await client.get("/.well-known/oauth-protected-resource")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_scoped_well_known_returns_200(client):
+    """Scoped /.well-known/oauth-protected-resource/mcp/v2 must exist
+    so /mcp/v2 OAuth clients can discover the authorization server."""
+    r = await client.get("/.well-known/oauth-protected-resource/mcp/v2")
+    assert r.status_code == 200
+    data = r.json()
+    assert "resource" in data
+    assert data["resource"].endswith("/mcp/v2")
