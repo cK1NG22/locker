@@ -10,7 +10,7 @@ export default function OrgDetail() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const router = useRouter();
-  const { getOrg, deleteOrg, addMember, removeMember, linkTeam, unlinkTeam } = useOrgs();
+  const { getOrg, updateOrg, deleteOrg, addMember, removeMember, linkTeam, unlinkTeam } = useOrgs();
   const { teams: allTeams } = useTeams();
   const [org, setOrg] = useState<OrgDetailType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +20,9 @@ export default function OrgDetail() {
   const [memberError, setMemberError] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [linkingTeam, setLinkingTeam] = useState(false);
+  const [editingConvention, setEditingConvention] = useState(false);
+  const [conventionValue, setConventionValue] = useState("");
+  const [savingConvention, setSavingConvention] = useState(false);
 
   const loadOrg = useCallback(async () => {
     if (!id) return;
@@ -113,8 +116,59 @@ export default function OrgDetail() {
         </div>
       </div>
       <div className="mb-6"><Link href={`/dashboard/orgs/${org.id}/analytics`} className="text-sm text-blue-600 hover:underline">View usage analytics</Link></div>
+      <div className="mb-6">
+        <label className="text-xs text-gray-400 uppercase tracking-wide">Skill Convention</label>
+        <p className="text-xs text-gray-400 mt-0.5 mb-2">The slash command prefix members use (e.g. /l, /locker)</p>
+        {editingConvention ? (
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="text"
+              value={conventionValue}
+              onChange={(e) => setConventionValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  if (!id || !conventionValue.trim()) return;
+                  setSavingConvention(true);
+                  updateOrg(id, { skill_convention: conventionValue.trim() })
+                    .then(() => { setEditingConvention(false); loadOrg(); })
+                    .catch((err) => alert(err instanceof Error ? err.message : "Failed to update"))
+                    .finally(() => setSavingConvention(false));
+                }
+                if (e.key === "Escape") setEditingConvention(false);
+              }}
+              className="border border-gray-300 rounded px-3 py-1.5 text-sm font-mono w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+            <button
+              onClick={() => {
+                if (!id || !conventionValue.trim()) return;
+                setSavingConvention(true);
+                updateOrg(id, { skill_convention: conventionValue.trim() })
+                  .then(() => { setEditingConvention(false); loadOrg(); })
+                  .catch((err) => alert(err instanceof Error ? err.message : "Failed to update"))
+                  .finally(() => setSavingConvention(false));
+              }}
+              disabled={savingConvention || !conventionValue.trim()}
+              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+            >
+              {savingConvention ? "Saving..." : "Save"}
+            </button>
+            <button onClick={() => setEditingConvention(false)} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mt-1">
+            <code className="text-sm bg-gray-100 px-2 py-1 rounded">{org.skill_convention}</code>
+            <button
+              onClick={() => { setConventionValue(org.skill_convention); setEditingConvention(true); }}
+              className="text-xs text-blue-600 hover:text-blue-800"
+            >
+              Change
+            </button>
+          </div>
+        )}
+      </div>
       <div className="flex items-center justify-between text-xs text-gray-400 pt-4 border-t border-gray-200">
-        <span>Convention: <code>{org.skill_convention}</code> | Created {new Date(org.created_at).toLocaleString()}</span>
+        <span>Created {new Date(org.created_at).toLocaleString()}</span>
         <button onClick={handleDelete} className="text-red-500 hover:text-red-700 transition-colors">Delete org</button>
       </div>
     </div>
