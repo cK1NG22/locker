@@ -8,7 +8,7 @@ export default function TeamDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember, removeMember, rotateToken } = useTeams();
+  const { getTeam, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember, removeMember, rotateToken, regenerateInviteCode } = useTeams();
   const { skills: allSkills } = useSkills();
 
   const [team, setTeam] = useState<TeamDetailType | null>(null);
@@ -19,7 +19,9 @@ export default function TeamDetail() {
   );
   const [tokenCopied, setTokenCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [inviteCodeCopied, setInviteCodeCopied] = useState(false);
   const [rotating, setRotating] = useState(false);
+  const [regeneratingCode, setRegeneratingCode] = useState(false);
 
   // Inline rename
   const [editingName, setEditingName] = useState(false);
@@ -70,6 +72,19 @@ export default function TeamDetail() {
       alert(e instanceof Error ? e.message : "Rotate failed");
     } finally {
       setRotating(false);
+    }
+  };
+
+  const handleRegenerateInviteCode = async () => {
+    if (!id || !confirm("Regenerate invite code? The old code will stop working.")) return;
+    setRegeneratingCode(true);
+    try {
+      const result = await regenerateInviteCode(id);
+      setTeam((t) => t ? { ...t, invite_code: result.invite_code } : t);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Regenerate failed");
+    } finally {
+      setRegeneratingCode(false);
     }
   };
 
@@ -224,6 +239,34 @@ export default function TeamDetail() {
           The full token is only shown once when created or rotated.
         </p>
       </div>
+
+      {/* Invite Code */}
+      {team.invite_code && (
+        <div className="mb-6">
+          <label className="text-xs text-gray-400 uppercase tracking-wide">Invite Code</label>
+          <div className="mt-1 flex items-center gap-2">
+            <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono text-gray-700 tracking-wider select-all">
+              {team.invite_code}
+            </code>
+            <button
+              onClick={() => copyToClipboard(team.invite_code!, setInviteCodeCopied)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
+            >
+              {inviteCodeCopied ? "Copied!" : "Copy"}
+            </button>
+            <button
+              onClick={handleRegenerateInviteCode}
+              disabled={regeneratingCode}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
+            >
+              {regeneratingCode ? "..." : "Regenerate"}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            Share this code with team members so they can join from their dashboard.
+          </p>
+        </div>
+      )}
 
       {/* Token modal (shown once after create or rotate) */}
       {showTokenModal && (

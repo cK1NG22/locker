@@ -40,6 +40,9 @@ _INSTRUCTIONS = (
 )
 
 
+_NO_TOKEN_MSG = "No token provided. Add X-User-Token (personal) or X-Team-Token (team) to your MCP config headers."
+
+
 def _vault_url() -> str:
     return os.environ.get("LOCKER_VAULT_URL", "http://localhost:8080")
 
@@ -68,11 +71,45 @@ async def _tool_use_skill(skill_name: str, team_token: str) -> str:
     return f"[LOCKER_TOKEN:{token}]"
 
 
+def _format_feedback_text(
+    feedback_text: str, observed: str, expected: str, cause: str, suggestion: str,
+) -> str:
+    """Build feedback text from structured fields, falling back to free-text."""
+    template_fields = [
+        ("What happened", observed),
+        ("What I expected", expected),
+        ("Why I think it happened", cause),
+        ("Suggested fix", suggestion),
+    ]
+    parts = [f"{label}: {val}" for label, val in template_fields if val.strip()]
+    text = "\n".join(parts) if parts else feedback_text.strip()
+    if not text:
+        raise ValueError("Provide feedback_text or at least one structured field (observed, expected, cause)")
+    return text
+
+
+def _find_skill(skills: list[dict], skill_name: str) -> dict | None:
+    """Find a skill by name in a skills list."""
+    return next((s for s in skills if s["name"] == skill_name), None)
+
+
+def _skill_not_found_msg(skill_name: str, skills: list[dict]) -> str:
+    available = [s["name"] for s in skills]
+    return f"Skill '{skill_name}' not found. Available skills: {', '.join(available) or 'none'}"
+
+
+def _auth_headers(team_token: str) -> dict:
+    """Convert internal token representation to the appropriate HTTP header."""
+    if team_token.startswith("__pat__:"):
+        return {"X-User-Token": team_token[len("__pat__:"):]}
+    return {"X-Team-Token": team_token}
+
+
 async def _get_skills(team_token: str) -> dict:
     async with httpx.AsyncClient() as http:
         resp = await http.get(
             f"{_vault_url()}/api/v1/employee/skills",
-            headers={"X-Team-Token": team_token},
+            headers=_auth_headers(team_token),
         )
         resp.raise_for_status()
     return resp.json()
@@ -80,7 +117,7 @@ async def _get_skills(team_token: str) -> dict:
 
 async def _tool_list_skills(team_token: str) -> str:
     if not team_token:
-        return "No team token provided. Add X-Team-Token to your MCP config headers."
+        return _NO_TOKEN_MSG
     data = await _get_skills(team_token)
     skills = data.get("skills", [])
     if not skills:
@@ -96,22 +133,22 @@ async def _tool_fetch_skill(skill_name: str, team_token: str) -> str:
     if not skill_name:
         raise ValueError("skill_name is required")
     if not team_token:
-        return "No team token provided. Add X-Team-Token to your MCP config headers."
+        return _NO_TOKEN_MSG
     data = await _get_skills(team_token)
-    for skill in data.get("skills", []):
-        if skill["name"] == skill_name:
-            content = skill.get("content")
-            if content is None:
-                return f"Skill '{skill_name}' is not open for access."
-            try:
-                from vault.db import get_db
-                from vault.usage import log_usage
-                await log_usage(get_db(), skill_name, team_id=None, source="mcp")
-            except Exception:
-                pass
-            return content
-    available = [s["name"] for s in data.get("skills", [])]
-    return f"Skill '{skill_name}' not found. Available skills: {', '.join(available) or 'none'}"
+    skills = data.get("skills", [])
+    skill = _find_skill(skills, skill_name)
+    if skill is None:
+        return _skill_not_found_msg(skill_name, skills)
+    content = skill.get("content")
+    if content is None:
+        return f"Skill '{skill_name}' is not open for access."
+    try:
+        from vault.db import get_db
+        from vault.usage import log_usage
+        await log_usage(get_db(), skill_name, team_id=None, source="mcp")
+    except Exception:
+        pass
+    return content
 
 
 async def _tool_submit_feedback(
@@ -125,37 +162,24 @@ async def _tool_submit_feedback(
 ) -> str:
     if not skill_name:
         raise ValueError("skill_name is required")
-    template_fields = [
-        ("observed", "What happened", observed),
-        ("expected", "What I expected", expected),
-        ("cause", "Why I think it happened", cause),
-        ("suggestion", "Suggested fix", suggestion),
-    ]
-    parts = [f"{label}: {val}" for _, label, val in template_fields if val.strip()]
-    final_text = "\n".join(parts) if parts else feedback_text.strip()
-    if not final_text:
-        raise ValueError("Provide feedback_text or at least one structured field (observed, expected, cause)")
+    final_text = _format_feedback_text(feedback_text, observed, expected, cause, suggestion)
     if not team_token:
-        return "No team token provided. Add X-Team-Token to your MCP config headers."
+        return _NO_TOKEN_MSG
 
     data = await _get_skills(team_token)
-    skill_id = None
-    for skill in data.get("skills", []):
-        if skill["name"] == skill_name:
-            skill_id = skill.get("id")
-            break
-    if skill_id is None:
-        available = [s["name"] for s in data.get("skills", [])]
-        return f"Skill '{skill_name}' not found. Available skills: {', '.join(available) or 'none'}"
+    skills = data.get("skills", [])
+    skill = _find_skill(skills, skill_name)
+    if skill is None:
+        return _skill_not_found_msg(skill_name, skills)
 
     async with httpx.AsyncClient() as http:
         resp = await http.post(
             f"{_vault_url()}/api/v1/skills/{skill_id}/feedback",
             json={"feedback_text": final_text},
-            headers={"X-Team-Token": team_token},
+            headers=_auth_headers(team_token),
         )
         resp.raise_for_status()
-    return f"Feedback submitted for skill '{skill_name}'. Thank you!"
+    return f"Feedback submitted for skill '{skill_name}'."
 
 
 # ============================================================
@@ -270,8 +294,11 @@ _init_options = InitializationOptions(
 
 
 async def handle_sse(request: Request) -> Response:
+    # Prefer X-User-Token (PAT) over X-Team-Token for auth
+    user_token = request.headers.get("x-user-token", "")
     team_token = request.headers.get("x-team-token", "")
-    token = _team_token_var.set(team_token)
+    effective_token = f"__pat__:{user_token}" if user_token else team_token
+    token = _team_token_var.set(effective_token)
     try:
         async with sse_transport.connect_sse(
             request.scope, request.receive, request._send
@@ -356,20 +383,20 @@ async def _oauth_fetch_skill(skill_name: str) -> str:
     if access_token is None:
         return "Not authenticated. Please reconnect via OAuth."
     data = await _get_skills_by_team_id(access_token.team_id)
-    for skill in data.get("skills", []):
-        if skill["name"] == skill_name:
-            content = skill.get("content")
-            if content is None:
-                return f"Skill '{skill_name}' is not open for access."
-            try:
-                from vault.db import get_db
-                from vault.usage import log_usage
-                await log_usage(get_db(), skill_name, team_id=access_token.team_id, source="mcp-oauth")
-            except Exception:
-                pass
-            return content
-    available = [s["name"] for s in data.get("skills", [])]
-    return f"Skill '{skill_name}' not found. Available skills: {', '.join(available) or 'none'}"
+    skills = data.get("skills", [])
+    skill = _find_skill(skills, skill_name)
+    if skill is None:
+        return _skill_not_found_msg(skill_name, skills)
+    content = skill.get("content")
+    if content is None:
+        return f"Skill '{skill_name}' is not open for access."
+    try:
+        from vault.db import get_db
+        from vault.usage import log_usage
+        await log_usage(get_db(), skill_name, team_id=access_token.team_id, source="mcp-oauth")
+    except Exception:
+        pass
+    return content
 
 
 async def _oauth_submit_feedback(
@@ -386,42 +413,24 @@ async def _oauth_submit_feedback(
     if access_token is None:
         return "Not authenticated. Please reconnect via OAuth."
 
-    template_fields = [
-        ("observed", "What happened", observed),
-        ("expected", "What I expected", expected),
-        ("cause", "Why I think it happened", cause),
-        ("suggestion", "Suggested fix", suggestion),
-    ]
-    parts = [f"{label}: {val}" for _, label, val in template_fields if val.strip()]
-    final_text = "\n".join(parts) if parts else feedback_text.strip()
-    if not final_text:
-        raise ValueError("Provide feedback_text or at least one structured field (observed, expected, cause)")
+    final_text = _format_feedback_text(feedback_text, observed, expected, cause, suggestion)
 
     data = await _get_skills_by_team_id(access_token.team_id)
-    skill_id = None
-    for skill in data.get("skills", []):
-        if skill["name"] == skill_name:
-            skill_id = skill.get("id")
-            break
-    if skill_id is None:
-        available = [s["name"] for s in data.get("skills", [])]
-        return f"Skill '{skill_name}' not found. Available skills: {', '.join(available) or 'none'}"
+    skills = data.get("skills", [])
+    skill = _find_skill(skills, skill_name)
+    if skill is None:
+        return _skill_not_found_msg(skill_name, skills)
 
     from vault.db import get_db
+    from vault.feedback import submit_feedback
     db = get_db()
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).isoformat()
-    fb_id = str(uuid.uuid4())
-
     team_row = await db.fetchrow("SELECT name FROM teams WHERE id = $1", access_token.team_id)
-    team_name = team_row["name"] if team_row else None
-
-    await db.execute(
-        "INSERT INTO skill_feedback (id, skill_id, team_id, feedback_text, submitter_team_name, created_at) "
-        "VALUES ($1, $2, $3, $4, $5, $6)",
-        fb_id, skill_id, access_token.team_id, final_text, team_name, now,
+    await submit_feedback(
+        db, skill["id"], final_text,
+        team_id=access_token.team_id,
+        submitter_team_name=team_row["name"] if team_row else None,
     )
-    return f"Feedback submitted for skill '{skill_name}'. Thank you!"
+    return f"Feedback submitted for skill '{skill_name}'."
 
 
 # Build the FastMCP server with OAuth

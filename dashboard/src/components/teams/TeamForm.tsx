@@ -7,6 +7,7 @@ import { copyToClipboard } from "../../lib/clipboard";
 interface CreatedTeam {
   id: string;
   token: string;
+  invite_code: string | null;
   name: string;
 }
 
@@ -95,8 +96,9 @@ export default function TeamForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Token copy
+  // Token / invite code copy
   const [copied, setCopied] = useState(false);
+  const [inviteCodeCopied, setInviteCodeCopied] = useState(false);
 
   // Step 2
   const [skillName, setSkillName] = useState("");
@@ -126,7 +128,7 @@ export default function TeamForm() {
     setError(null);
     try {
       const result = await createTeam(name.trim());
-      setCreatedTeam({ id: result.id, token: result.token, name: name.trim() });
+      setCreatedTeam({ id: result.id, token: result.token, invite_code: result.invite_code, name: name.trim() });
       setStep(2);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create failed");
@@ -250,6 +252,28 @@ export default function TeamForm() {
           </h2>
 
           <TokenDisplay token={createdTeam.token} copied={copied} onCopy={copyToken} />
+
+          {createdTeam.invite_code && (
+            <div className="mb-4">
+              <label className="text-xs text-gray-400 uppercase tracking-wide">
+                Invite Code
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm font-mono text-gray-700 tracking-wider select-all">
+                  {createdTeam.invite_code}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(createdTeam.invite_code!, setInviteCodeCopied)}
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  {inviteCodeCopied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Share this code with team members so they can join from their dashboard.
+              </p>
+            </div>
+          )}
 
           {skillSuccess ? (
             <div className="space-y-4">

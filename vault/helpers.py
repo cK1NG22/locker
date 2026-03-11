@@ -26,6 +26,29 @@ async def require_team_token(
     return {"id": row["id"], "name": row["name"]}
 
 
+async def resolve_user_from_pat(token: str) -> dict | None:
+    """Resolve a personal access token to a user. Returns {user_id, teams: [{id, name}]} or None."""
+    db = get_db()
+    hashed = hash_token(token)
+    row = await db.fetchrow(
+        "SELECT user_id FROM user_tokens WHERE token_hash = $1 AND revoked_at IS NULL",
+        hashed,
+    )
+    if row is None:
+        return None
+    user_id = row["user_id"]
+    team_rows = await db.fetch(
+        "SELECT t.id, t.name FROM teams t "
+        "JOIN team_members tm ON t.id = tm.team_id "
+        "WHERE tm.user_id = $1",
+        user_id,
+    )
+    return {
+        "user_id": user_id,
+        "teams": [{"id": r["id"], "name": r["name"]} for r in team_rows],
+    }
+
+
 async def require_team_admin(team_id: str, user_id: str) -> None:
     """Raise 403 if user is not an admin member of the team.
     NULL-owner teams (pre-3.2) are editable by any authenticated user.

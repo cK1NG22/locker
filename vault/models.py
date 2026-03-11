@@ -106,6 +106,7 @@ class TeamOut(BaseModel):
     name: str
     slug: Optional[str] = None
     token_prefix: str
+    invite_code: Optional[str] = None
     owner_id: Optional[str] = None
     created_at: str
 
@@ -116,6 +117,7 @@ class TeamCreated(BaseModel):
     slug: Optional[str] = None
     token: str
     token_prefix: str
+    invite_code: Optional[str] = None
     owner_id: Optional[str] = None
     created_at: str
 
@@ -132,10 +134,29 @@ class TeamDetail(BaseModel):
     name: str
     slug: Optional[str] = None
     token_prefix: str
+    invite_code: Optional[str] = None
     owner_id: Optional[str] = None
     created_at: str
     skills: List[str]
     members: List[TeamMemberOut] = []
+
+
+class TeamJoin(BaseModel):
+    invite_code: str
+
+
+class TeamJoinResult(BaseModel):
+    team_id: str
+    team_name: str
+    already_member: bool
+    personal_token: Optional[str] = None
+
+
+class PersonalToken(BaseModel):
+    id: str
+    prefix: str
+    name: str
+    created_at: str
 
 
 class TeamSkillsSet(BaseModel):

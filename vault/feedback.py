@@ -12,7 +12,7 @@ from src.middleware.rate_limit import limiter
 from vault.auth_deps import require_user
 from vault.audit import audit
 from vault.db import get_db
-from vault.helpers import require_team_token
+from vault.helpers import require_team_token, resolve_user_from_pat
 
 _FEEDBACK_SELECT = (
     "SELECT f.id, f.skill_id, f.team_id, f.feedback_text, f.status, "
@@ -77,16 +77,28 @@ async def post_feedback(
     skill_id: str,
     body: FeedbackBody,
     x_team_token: Optional[str] = Header(None, alias="X-Team-Token"),
+    x_user_token: Optional[str] = Header(None, alias="X-User-Token"),
 ):
-    team = await require_team_token(x_team_token)
+    # Resolve auth: PAT or legacy team token
+    if x_user_token:
+        user_info = await resolve_user_from_pat(x_user_token)
+        if user_info is None:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        first_team = user_info["teams"][0] if user_info["teams"] else {}
+        team_id = first_team.get("id")
+        team_name = first_team.get("name")
+    else:
+        team = await require_team_token(x_team_token)
+        team_id, team_name = team["id"], team["name"]
+
     db = get_db()
     row = await db.fetchrow("SELECT id FROM skills WHERE id = $1", skill_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Skill not found")
     return await submit_feedback(
         db, skill_id, body.feedback_text,
-        team_id=team["id"],
-        submitter_team_name=team["name"],
+        team_id=team_id,
+        submitter_team_name=team_name,
     )
 
 

@@ -21,6 +21,7 @@ export interface TeamDetail {
   id: string;
   name: string;
   token_prefix: string;
+  invite_code: string | null;
   owner_id: string | null;
   created_at: string;
   skills: string[];
@@ -32,8 +33,16 @@ export interface TeamCreated {
   name: string;
   token: string;
   token_prefix: string;
+  invite_code: string | null;
   owner_id: string | null;
   created_at: string;
+}
+
+export interface TeamJoinResult {
+  team_id: string;
+  team_name: string;
+  already_member: boolean;
+  personal_token: string | null;
 }
 
 export function useTeams() {
@@ -121,5 +130,21 @@ export function useTeams() {
     [],
   );
 
-  return { teams, loading, error, refresh, getTeam, createTeam, rotateToken, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember, removeMember };
+  const joinTeam = useCallback(
+    async (inviteCode: string) => {
+      const result = await api.post<TeamJoinResult>("/api/v1/teams/join", { invite_code: inviteCode });
+      await refresh();
+      return result;
+    },
+    [refresh],
+  );
+
+  const regenerateInviteCode = useCallback(
+    async (teamId: string) => {
+      return api.post<{ invite_code: string }>(`/api/v1/teams/${teamId}/regenerate-invite-code`, {});
+    },
+    [],
+  );
+
+  return { teams, loading, error, refresh, getTeam, createTeam, rotateToken, updateTeam, deleteTeam, setTeamSkills, updateMember, addMember, removeMember, joinTeam, regenerateInviteCode };
 }

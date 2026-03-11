@@ -45,6 +45,7 @@ _CREATE_TABLES = [
         token_hash   TEXT NOT NULL UNIQUE,
         token_prefix TEXT NOT NULL,
         token_encrypted TEXT,
+        invite_code  TEXT UNIQUE,
         owner_id     TEXT,
         org_id       TEXT REFERENCES organizations(id) ON DELETE SET NULL,
         created_at   TEXT NOT NULL
@@ -108,6 +109,15 @@ _CREATE_TABLES = [
         metadata        JSONB,
         created_at      TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS user_tokens (
+        id          TEXT PRIMARY KEY,
+        user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash  TEXT NOT NULL UNIQUE,
+        token_prefix TEXT NOT NULL,
+        name        TEXT NOT NULL DEFAULT 'default',
+        created_at  TEXT NOT NULL,
+        revoked_at  TEXT
+    )""",
     """CREATE TABLE IF NOT EXISTS oauth_clients (
         client_id         TEXT PRIMARY KEY,
         client_secret_hash TEXT,
@@ -153,6 +163,7 @@ async def init_db() -> None:
         # One-time migrations for existing tables
         await conn.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS slug TEXT UNIQUE")
         await conn.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS token_encrypted TEXT")
+        await conn.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS invite_code TEXT UNIQUE")
         # Backfill slugs for teams that don't have one
         import re
         rows = await conn.fetch("SELECT id, name FROM teams WHERE slug IS NULL")
@@ -166,6 +177,14 @@ async def init_db() -> None:
                     await conn.execute("UPDATE teams SET slug = $1 WHERE id = $2", candidate, row["id"])
                     break
                 counter += 1
+        # Backfill invite codes for teams that don't have one
+        from vault.token_utils import generate_invite_code
+        rows = await conn.fetch("SELECT id, name FROM teams WHERE invite_code IS NULL")
+        for row in rows:
+            code = generate_invite_code(row["name"])
+            while await conn.fetchval("SELECT 1 FROM teams WHERE invite_code = $1", code):
+                code = generate_invite_code(row["name"])
+            await conn.execute("UPDATE teams SET invite_code = $1 WHERE id = $2", code, row["id"])
 
 
 async def close_db() -> None:

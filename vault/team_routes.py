@@ -22,11 +22,22 @@ from vault.models import (
     SkillCopied,
     MyTeam,
     MemberSkill,
+    TeamJoin,
+    TeamJoinResult,
+    PersonalToken,
 )
 from vault.crypto import encrypt, decrypt
-from vault.token_utils import generate_token
+from vault.token_utils import generate_token, generate_invite_code, generate_pat
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
+
+
+async def _unique_invite_code(db, name: str) -> str:
+    """Generate an invite code, retrying on collision."""
+    code = generate_invite_code(name)
+    while await db.fetchval("SELECT 1 FROM teams WHERE invite_code = $1", code):
+        code = generate_invite_code(name)
+    return code
 
 
 def slugify(name: str) -> str:
@@ -36,6 +47,16 @@ def slugify(name: str) -> str:
     slug = re.sub(r'[\s]+', '-', slug)
     slug = re.sub(r'-+', '-', slug)
     return slug.strip('-')
+
+
+async def _require_membership(db, team_id: str, user_id: str) -> None:
+    """Raise 403 if user is not a member of the team."""
+    row = await db.fetchrow(
+        "SELECT id FROM team_members WHERE team_id = $1 AND user_id = $2",
+        team_id, user_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=403, detail="Not a member of this team")
 
 
 async def _require_team_share(team_id: str, user_id: str) -> None:
@@ -67,13 +88,14 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
     now = utc_now()
     user_id = user["sub"]
     db = get_db()
+    invite_code = await _unique_invite_code(db, body.name)
 
     async with db.acquire() as conn:
         async with conn.transaction():
             try:
                 await conn.execute(
-                    "INSERT INTO teams (id, name, slug, token_hash, token_prefix, token_encrypted, owner_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-                    team_id, body.name, slug, token_hash, token_prefix, token_enc, user_id, now,
+                    "INSERT INTO teams (id, name, slug, token_hash, token_prefix, token_encrypted, invite_code, owner_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                    team_id, body.name, slug, token_hash, token_prefix, token_enc, invite_code, user_id, now,
                 )
             except UniqueViolationError:
                 raise HTTPException(status_code=409, detail=f"Team '{body.name}' already exists")
@@ -82,7 +104,7 @@ async def create_team(body: TeamCreate, user: dict = Depends(require_user)):
                 member_id, team_id, user_id, "admin", True, now,
             )
     await audit(db, user["sub"], "team.create", "team", team_id, {"name": body.name})
-    return TeamCreated(id=team_id, name=body.name, slug=slug, token=plaintext, token_prefix=token_prefix, owner_id=user_id, created_at=now)
+    return TeamCreated(id=team_id, name=body.name, slug=slug, token=plaintext, token_prefix=token_prefix, invite_code=invite_code, owner_id=user_id, created_at=now)
 
 
 @router.get("/teams", response_model=list[TeamSummary])
@@ -135,17 +157,11 @@ async def my_teams(user: dict = Depends(require_user)):
 async def get_team(team_id: str, user: dict = Depends(require_user)):
     db = get_db()
     row = await db.fetchrow(
-        "SELECT id, name, slug, token_prefix, owner_id, created_at FROM teams WHERE id = $1", team_id
+        "SELECT id, name, slug, token_prefix, invite_code, owner_id, created_at FROM teams WHERE id = $1", team_id
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
-    # B4: Verify requesting user is a member
-    member = await db.fetchrow(
-        "SELECT id FROM team_members WHERE team_id = $1 AND user_id = $2",
-        team_id, user["sub"],
-    )
-    if member is None:
-        raise HTTPException(status_code=403, detail="Not a member of this team")
+    await _require_membership(db, team_id, user["sub"])
     skill_rows = await db.fetch(
         "SELECT s.name FROM skills s JOIN team_skills ts ON s.id = ts.skill_id WHERE ts.team_id = $1",
         team_id,
@@ -174,6 +190,7 @@ async def get_team(team_id: str, user: dict = Depends(require_user)):
         name=row["name"],
         slug=row["slug"],
         token_prefix=row["token_prefix"],
+        invite_code=row["invite_code"],
         owner_id=row["owner_id"],
         created_at=row["created_at"],
         skills=skill_names,
@@ -185,13 +202,7 @@ async def get_team(team_id: str, user: dict = Depends(require_user)):
 async def get_member_skills(team_id: str, user: dict = Depends(require_user)):
     """Member skill browsing — returns visible skills for team members."""
     db = get_db()
-    # Verify membership
-    member = await db.fetchrow(
-        "SELECT id FROM team_members WHERE team_id = $1 AND user_id = $2",
-        team_id, user["sub"],
-    )
-    if member is None:
-        raise HTTPException(status_code=403, detail="Not a member of this team")
+    await _require_membership(db, team_id, user["sub"])
     rows = await db.fetch(
         "SELECT s.id, s.name, s.description, s.visibility, s.content FROM skills s "
         "JOIN team_skills ts ON s.id = ts.skill_id "
@@ -213,7 +224,7 @@ async def update_team(team_id: str, body: TeamUpdate, user: dict = Depends(requi
     await require_team_admin(team_id, user["sub"])
     db = get_db()
     row = await db.fetchrow(
-        "SELECT id, name, token_prefix, owner_id, created_at FROM teams WHERE id = $1", team_id
+        "SELECT id, name, token_prefix, invite_code, owner_id, created_at FROM teams WHERE id = $1", team_id
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -226,7 +237,7 @@ async def update_team(team_id: str, body: TeamUpdate, user: dict = Depends(requi
         raise HTTPException(status_code=409, detail=f"Team '{body.name}' already exists")
     await audit(db, user["sub"], "team.update", "team", team_id, {"name": body.name})
     return TeamOut(
-        id=row["id"], name=body.name, slug=slug, token_prefix=row["token_prefix"], owner_id=row["owner_id"], created_at=row["created_at"]
+        id=row["id"], name=body.name, slug=slug, token_prefix=row["token_prefix"], invite_code=row["invite_code"], owner_id=row["owner_id"], created_at=row["created_at"]
     )
 
 
@@ -243,7 +254,7 @@ async def rotate_token(team_id: str, user: dict = Depends(require_user)):
     await require_team_admin(team_id, user["sub"])
     db = get_db()
     row = await db.fetchrow(
-        "SELECT id, name, slug, owner_id, created_at FROM teams WHERE id = $1", team_id
+        "SELECT id, name, slug, invite_code, owner_id, created_at FROM teams WHERE id = $1", team_id
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -255,7 +266,7 @@ async def rotate_token(team_id: str, user: dict = Depends(require_user)):
     )
     return TeamCreated(
         id=row["id"], name=row["name"], slug=row["slug"], token=plaintext, token_prefix=token_prefix,
-        owner_id=row["owner_id"], created_at=row["created_at"],
+        invite_code=row["invite_code"], owner_id=row["owner_id"], created_at=row["created_at"],
     )
 
 
@@ -466,3 +477,118 @@ async def copy_skill_to_team(skill_id: str, target_team_id: str, user: dict = De
 
     await audit(db, user["sub"], "skill.copy_to_team", "skill", new_skill_id, {"source_skill_id": skill_id, "target_team_id": target_team_id})
     return SkillCopied(id=new_skill_id, name=skill["name"], target_team_id=target_team_id, created_at=now)
+
+
+# ============================================================
+# Invite code endpoints
+# ============================================================
+
+
+@router.post("/teams/join", response_model=TeamJoinResult)
+async def join_team(body: TeamJoin, user: dict = Depends(require_user)):
+    db = get_db()
+    code = body.invite_code.strip().upper()
+    team_row = await db.fetchrow(
+        "SELECT id, name FROM teams WHERE invite_code = $1", code
+    )
+    if team_row is None:
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+    user_id = user["sub"]
+    team_id = team_row["id"]
+
+    # Check if already a member
+    existing = await db.fetchrow(
+        "SELECT id FROM team_members WHERE team_id = $1 AND user_id = $2",
+        team_id, user_id,
+    )
+    if existing:
+        return TeamJoinResult(team_id=team_id, team_name=team_row["name"], already_member=True)
+
+    # Add as member
+    member_id = str(uuid.uuid4())
+    now = utc_now()
+    await db.execute(
+        "INSERT INTO team_members (id, team_id, user_id, role, can_share, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+        member_id, team_id, user_id, "member", False, now,
+    )
+
+    # Generate PAT if user doesn't have one
+    pat_plaintext = None
+    existing_pat = await db.fetchrow(
+        "SELECT id FROM user_tokens WHERE user_id = $1 AND revoked_at IS NULL", user_id
+    )
+    if not existing_pat:
+        plaintext, pat_hash, pat_prefix = generate_pat()
+        pat_id = str(uuid.uuid4())
+        await db.execute(
+            "INSERT INTO user_tokens (id, user_id, token_hash, token_prefix, name, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+            pat_id, user_id, pat_hash, pat_prefix, "default", now,
+        )
+        pat_plaintext = plaintext
+
+    await audit(db, user["sub"], "team.join", "team", team_id, {"invite_code": code})
+    return TeamJoinResult(team_id=team_id, team_name=team_row["name"], already_member=False, personal_token=pat_plaintext)
+
+
+@router.post("/teams/{team_id}/regenerate-invite-code")
+async def regenerate_invite_code_endpoint(team_id: str, user: dict = Depends(require_user)):
+    await require_team_admin(team_id, user["sub"])
+    db = get_db()
+    row = await db.fetchrow("SELECT name FROM teams WHERE id = $1", team_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+    code = await _unique_invite_code(db, row["name"])
+    await db.execute("UPDATE teams SET invite_code = $1 WHERE id = $2", code, team_id)
+    await audit(db, user["sub"], "team.regenerate_invite_code", "team", team_id, {"invite_code": code})
+    return {"invite_code": code}
+
+
+# ============================================================
+# Personal Access Token (PAT) management
+# ============================================================
+
+
+@router.get("/me/tokens", response_model=list[PersonalToken])
+async def list_tokens(user: dict = Depends(require_user)):
+    db = get_db()
+    rows = await db.fetch(
+        "SELECT id, token_prefix, name, created_at FROM user_tokens "
+        "WHERE user_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC",
+        user["sub"],
+    )
+    return [
+        PersonalToken(id=r["id"], prefix=r["token_prefix"], name=r["name"], created_at=r["created_at"])
+        for r in rows
+    ]
+
+
+@router.post("/me/tokens", status_code=201)
+async def create_token(user: dict = Depends(require_user)):
+    db = get_db()
+    plaintext, pat_hash, pat_prefix = generate_pat()
+    pat_id = str(uuid.uuid4())
+    now = utc_now()
+    # Count existing active tokens to name them
+    count = await db.fetchval(
+        "SELECT COUNT(*) FROM user_tokens WHERE user_id = $1 AND revoked_at IS NULL",
+        user["sub"],
+    )
+    name = "default" if count == 0 else f"token-{count + 1}"
+    await db.execute(
+        "INSERT INTO user_tokens (id, user_id, token_hash, token_prefix, name, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+        pat_id, user["sub"], pat_hash, pat_prefix, name, now,
+    )
+    return {"id": pat_id, "token": plaintext, "prefix": pat_prefix, "name": name, "created_at": now}
+
+
+@router.delete("/me/tokens/{token_id}", status_code=204)
+async def revoke_token(token_id: str, user: dict = Depends(require_user)):
+    db = get_db()
+    row = await db.fetchrow(
+        "SELECT id FROM user_tokens WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL",
+        token_id, user["sub"],
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Token not found")
+    now = utc_now()
+    await db.execute("UPDATE user_tokens SET revoked_at = $1 WHERE id = $2", now, token_id)
