@@ -72,15 +72,16 @@ app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 
 # CORS for frontend on Vercel
-_cors_origins = [o.strip() for o in os.environ.get("LOCKER_CORS_ORIGINS", "").split(",") if o.strip()]
-if _cors_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=_cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+_DEFAULT_ORIGINS = ["https://web-theta-one-34.vercel.app"]
+_env_origins = [o.strip() for o in os.environ.get("LOCKER_CORS_ORIGINS", "").split(",") if o.strip()]
+_cors_origins = list(set(_DEFAULT_ORIGINS + _env_origins))
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")

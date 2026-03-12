@@ -262,9 +262,10 @@ export default function TeamDetail() {
               {regeneratingCode ? "..." : "Regenerate"}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mt-1">
-            Share this code with team members so they can join from their dashboard.
-          </p>
+          <div className="mt-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+            <p className="text-xs text-gray-500 mb-1">Team members can join from their terminal:</p>
+            <code className="text-sm font-mono text-gray-800 select-all">locker join {team.invite_code}</code>
+          </div>
         </div>
       )}
 

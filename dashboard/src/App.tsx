@@ -25,7 +25,7 @@ function AuthenticatedApp() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <main className="flex-1 p-6 overflow-auto bg-gray-50">
+      <main className="flex-1 p-6 pt-16 md:pt-6 overflow-auto bg-gray-50">
         <Routes>
           <Route path="/skills" element={<SkillList />} />
           <Route path="/skills/upload" element={<SkillUpload />} />
