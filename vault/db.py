@@ -177,6 +177,8 @@ async def init_db() -> None:
                     await conn.execute("UPDATE teams SET slug = $1 WHERE id = $2", candidate, row["id"])
                     break
                 counter += 1
+        # Ensure skill_feedback has submitter_team_name column
+        await conn.execute("ALTER TABLE skill_feedback ADD COLUMN IF NOT EXISTS submitter_team_name TEXT")
         # Backfill invite codes for teams that don't have one
         from vault.token_utils import generate_invite_code
         rows = await conn.fetch("SELECT id, name FROM teams WHERE invite_code IS NULL")
