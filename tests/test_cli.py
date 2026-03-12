@@ -458,3 +458,173 @@ def test_setup_skill_download_failure_non_fatal(tmp_path, monkeypatch):
     assert claude_json.exists()
     assert not (commands_dir / "locker.md").exists()
     assert "Warning" in result.output
+
+
+# ── Join tests ────────────────────────────────────────────────────────
+
+JOIN_URL = "https://locker.up.railway.app"
+JOIN_API = f"{JOIN_URL}/api/v1/invite/join-cli"
+JOIN_RESPONSE = {
+    "team_name": "ACME Corp",
+    "team_token": "test-team-uuid",
+    "server_url": JOIN_URL,
+    "skill_count": 5,
+}
+
+
+def test_join_cli_valid_code(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    desktop_config = tmp_path / "Claude" / "claude_desktop_config.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.CLAUDE_DESKTOP_CONFIG_PATH", desktop_config)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.post(JOIN_API).mock(return_value=httpx.Response(200, json=JOIN_RESPONSE))
+        respx.get(SKILL_URL).mock(return_value=httpx.Response(200, text=SKILL_CONTENT))
+        result = runner.invoke(app, ["join", "ACME-7X3K"])
+
+    assert result.exit_code == 0
+    assert "ACME Corp" in result.output
+    assert "5 skills" in result.output
+    config = json.loads(claude_json.read_text())
+    assert config["mcpServers"]["locker"]["headers"]["X-Team-Token"] == "test-team-uuid"
+
+
+def test_join_cli_invalid_code(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    desktop_config = tmp_path / "Claude" / "claude_desktop_config.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.CLAUDE_DESKTOP_CONFIG_PATH", desktop_config)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.post(JOIN_API).mock(
+            return_value=httpx.Response(404, json={"detail": "Invalid invite code"})
+        )
+        result = runner.invoke(app, ["join", "BAD-CODE"])
+
+    assert result.exit_code == 1
+    assert "Invalid invite code" in result.output
+
+
+def test_join_cli_null_token(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    desktop_config = tmp_path / "Claude" / "claude_desktop_config.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.CLAUDE_DESKTOP_CONFIG_PATH", desktop_config)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.post(JOIN_API).mock(
+            return_value=httpx.Response(404, json={"detail": "Team setup incomplete — ask admin to rotate the team token"})
+        )
+        result = runner.invoke(app, ["join", "ACME-7X3K"])
+
+    assert result.exit_code == 1
+    assert "ask admin" in result.output
+
+
+def test_join_cli_decrypt_failure(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    desktop_config = tmp_path / "Claude" / "claude_desktop_config.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.CLAUDE_DESKTOP_CONFIG_PATH", desktop_config)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.post(JOIN_API).mock(
+            return_value=httpx.Response(500, json={"detail": "Failed to decrypt team token — contact admin"})
+        )
+        result = runner.invoke(app, ["join", "ACME-7X3K"])
+
+    assert result.exit_code == 1
+    assert "decrypt" in result.output.lower() or "contact admin" in result.output.lower()
+
+
+def test_join_writes_claude_code_config(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    desktop_config = tmp_path / "Claude" / "claude_desktop_config.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.CLAUDE_DESKTOP_CONFIG_PATH", desktop_config)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.post(JOIN_API).mock(return_value=httpx.Response(200, json=JOIN_RESPONSE))
+        respx.get(SKILL_URL).mock(return_value=httpx.Response(200, text=SKILL_CONTENT))
+        runner.invoke(app, ["join", "ACME-7X3K"])
+
+    config = json.loads(claude_json.read_text())
+    assert config["mcpServers"]["locker"]["type"] == "sse"
+    assert config["mcpServers"]["locker"]["url"] == f"{JOIN_URL}/mcp"
+    assert config["mcpServers"]["locker"]["headers"]["X-Team-Token"] == "test-team-uuid"
+
+
+def test_join_writes_claude_desktop_config(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    desktop_config = tmp_path / "Claude" / "claude_desktop_config.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.CLAUDE_DESKTOP_CONFIG_PATH", desktop_config)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.post(JOIN_API).mock(return_value=httpx.Response(200, json=JOIN_RESPONSE))
+        respx.get(SKILL_URL).mock(return_value=httpx.Response(200, text=SKILL_CONTENT))
+        runner.invoke(app, ["join", "ACME-7X3K"])
+
+    assert desktop_config.exists()
+    config = json.loads(desktop_config.read_text())
+    assert config["mcpServers"]["locker"]["type"] == "sse"
+    assert config["mcpServers"]["locker"]["url"] == f"{JOIN_URL}/mcp"
+    assert config["mcpServers"]["locker"]["headers"]["X-Team-Token"] == "test-team-uuid"
+
+
+def test_join_server_unreachable(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    desktop_config = tmp_path / "Claude" / "claude_desktop_config.json"
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.CLAUDE_DESKTOP_CONFIG_PATH", desktop_config)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.post(JOIN_API).mock(side_effect=httpx.ConnectError("Connection refused"))
+        result = runner.invoke(app, ["join", "ACME-7X3K"])
+
+    assert result.exit_code == 1
+    assert "Could not reach server" in result.output
+    assert not claude_json.exists()
+
+
+def test_join_preserves_existing_config(tmp_path, monkeypatch):
+    claude_json = tmp_path / ".claude.json"
+    claude_json.write_text(json.dumps({"existingKey": "keep", "mcpServers": {"other-server": {"url": "http://other"}}}))
+    desktop_config = tmp_path / "Claude" / "claude_desktop_config.json"
+    desktop_config.parent.mkdir(parents=True, exist_ok=True)
+    desktop_config.write_text(json.dumps({"mcpServers": {"another": {"url": "http://x"}}}))
+    commands_dir = tmp_path / ".claude" / "commands"
+    monkeypatch.setattr("cli.setup.CLAUDE_JSON_PATH", claude_json)
+    monkeypatch.setattr("cli.setup.CLAUDE_DESKTOP_CONFIG_PATH", desktop_config)
+    monkeypatch.setattr("cli.setup.COMMANDS_DIR", commands_dir)
+
+    with respx.mock:
+        respx.post(JOIN_API).mock(return_value=httpx.Response(200, json=JOIN_RESPONSE))
+        respx.get(SKILL_URL).mock(return_value=httpx.Response(200, text=SKILL_CONTENT))
+        result = runner.invoke(app, ["join", "ACME-7X3K"])
+
+    assert result.exit_code == 0
+    # Claude Code config preserved
+    cc = json.loads(claude_json.read_text())
+    assert cc["existingKey"] == "keep"
+    assert "other-server" in cc["mcpServers"]
+    assert "locker" in cc["mcpServers"]
+    # Desktop config preserved
+    dc = json.loads(desktop_config.read_text())
+    assert "another" in dc["mcpServers"]
+    assert "locker" in dc["mcpServers"]

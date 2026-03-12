@@ -5,7 +5,7 @@ import typer
 
 from cli.deploy import deploy as _deploy
 from cli.deploy import deploy_folder as _deploy_folder
-from cli.setup import setup as _setup
+from cli.setup import setup as _setup, join as _join
 from cli.sync import sync as _sync
 
 app = typer.Typer()
@@ -32,6 +32,14 @@ def setup(
     team_token: Optional[str] = typer.Option(None, "--token", "-t", help="Your team token"),
 ) -> None:
     _setup(url=url, team_token=team_token)
+
+
+@app.command()
+def join(
+    invite_code: str = typer.Argument(..., help="Team invite code (e.g. ACME-7X3K)"),
+    url: Optional[str] = typer.Option(None, "--url", "-u", help="Locker server URL (default: https://locker.up.railway.app)"),
+) -> None:
+    _join(invite_code=invite_code, url=url)
 
 
 @app.command()

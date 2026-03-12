@@ -74,13 +74,16 @@ CREATE TABLE IF NOT EXISTS org_members (
 );
 
 CREATE TABLE IF NOT EXISTS teams (
-    id           TEXT PRIMARY KEY,
-    name         TEXT NOT NULL UNIQUE,
-    token_hash   TEXT NOT NULL UNIQUE,
-    token_prefix TEXT NOT NULL,
-    owner_id     TEXT,
-    org_id       TEXT REFERENCES organizations(id) ON DELETE SET NULL,
-    created_at   TEXT NOT NULL
+    id               TEXT PRIMARY KEY,
+    name             TEXT NOT NULL UNIQUE,
+    slug             TEXT UNIQUE,
+    token_hash       TEXT NOT NULL UNIQUE,
+    token_prefix     TEXT NOT NULL,
+    token_encrypted  TEXT,
+    invite_code      TEXT UNIQUE,
+    owner_id         TEXT,
+    org_id           TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+    created_at       TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS team_members (
@@ -149,6 +152,16 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at      TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS user_tokens (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL,
+    token_hash  TEXT NOT NULL UNIQUE,
+    token_prefix TEXT NOT NULL,
+    name        TEXT NOT NULL DEFAULT 'default',
+    created_at  TEXT NOT NULL,
+    revoked_at  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS oauth_clients (
     client_id         TEXT PRIMARY KEY,
     client_secret_hash TEXT,
@@ -185,7 +198,7 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
 """
 
 _TABLES = [
-    "oauth_tokens", "oauth_codes", "oauth_clients",
+    "oauth_tokens", "oauth_codes", "oauth_clients", "user_tokens",
     "audit_logs", "skill_share_requests", "skill_feedback", "skill_usage",
     "skill_files", "team_skills", "team_members", "teams",
     "org_members", "organizations", "skills", "users",

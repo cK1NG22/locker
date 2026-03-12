@@ -1,13 +1,14 @@
 import os
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from vault.auth_deps import require_user
 from vault.audit import audit
 from vault.crypto import decrypt
 from vault.db import get_db
 from vault.helpers import utc_now
+from src.middleware.rate_limit import limiter
 
 _BASE_URL = os.environ.get("LOCKER_BASE_URL", "https://locker.up.railway.app")
 
@@ -43,7 +44,7 @@ async def join_team(slug: str, user: dict = Depends(require_user)):
     """Requires Bearer JWT. Adds user to team, returns setup info."""
     db = get_db()
     row = await db.fetchrow(
-        "SELECT id, name, token_encrypted FROM teams WHERE slug = $1", slug
+        "SELECT id, name, token_encrypted, invite_code FROM teams WHERE slug = $1", slug
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -57,17 +58,16 @@ async def join_team(slug: str, user: dict = Depends(require_user)):
         team_id, user_id,
     )
 
-    setup_command = None
-    if row["token_encrypted"]:
-        token = decrypt(row["token_encrypted"])
-        setup_command = f"curl -fsSL {_BASE_URL}/setup/{token} | bash"
+    cli_command = None
+    if row["invite_code"]:
+        cli_command = f"locker join {row['invite_code']}"
 
     if existing:
         # Already a member — still return setup info (409 with data)
         return {
             "team_id": team_id,
             "team_name": row["name"],
-            "setup_command": setup_command,
+            "cli_command": cli_command,
             "already_member": True,
         }
 
@@ -83,17 +83,17 @@ async def join_team(slug: str, user: dict = Depends(require_user)):
     return {
         "team_id": team_id,
         "team_name": row["name"],
-        "setup_command": setup_command,
+        "cli_command": cli_command,
         "already_member": False,
     }
 
 
 @router.get("/{slug}/setup")
 async def get_setup_command(slug: str, user: dict = Depends(require_user)):
-    """Requires Bearer JWT + team membership. Returns setup command."""
+    """Requires Bearer JWT + team membership. Returns CLI command."""
     db = get_db()
     row = await db.fetchrow(
-        "SELECT id, name, token_encrypted FROM teams WHERE slug = $1", slug
+        "SELECT id, name, invite_code FROM teams WHERE slug = $1", slug
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -106,10 +106,56 @@ async def get_setup_command(slug: str, user: dict = Depends(require_user)):
     if member is None:
         raise HTTPException(status_code=403, detail="Not a member of this team")
 
-    if not row["token_encrypted"]:
-        raise HTTPException(status_code=404, detail="Team token not available — ask a team admin to rotate the token")
+    if not row["invite_code"]:
+        raise HTTPException(status_code=404, detail="Invite code not available — ask a team admin to regenerate it")
 
-    token = decrypt(row["token_encrypted"])
     return {
-        "setup_command": f"curl -fsSL {_BASE_URL}/setup/{token} | bash",
+        "cli_command": f"locker join {row['invite_code']}",
+    }
+
+
+@router.post("/join-cli")
+@limiter.limit("5/minute")
+async def join_cli(request: Request):
+    """Public — no auth. Validates invite code, returns team info for CLI setup."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid JSON body")
+
+    invite_code = (body.get("invite_code") or "").strip().upper()
+    if not invite_code:
+        raise HTTPException(status_code=422, detail="invite_code is required")
+
+    db = get_db()
+    row = await db.fetchrow(
+        "SELECT id, name, token_encrypted FROM teams WHERE invite_code = $1",
+        invite_code,
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+
+    if not row["token_encrypted"]:
+        raise HTTPException(
+            status_code=404,
+            detail="Team setup incomplete — ask admin to rotate the team token",
+        )
+
+    try:
+        team_token = decrypt(row["token_encrypted"])
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to decrypt team token — contact admin",
+        )
+
+    skill_count = await db.fetchval(
+        "SELECT COUNT(*) FROM team_skills WHERE team_id = $1", row["id"]
+    )
+
+    return {
+        "team_name": row["name"],
+        "team_token": team_token,
+        "server_url": _BASE_URL,
+        "skill_count": skill_count,
     }
