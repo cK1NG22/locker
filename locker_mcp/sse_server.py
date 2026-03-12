@@ -8,6 +8,7 @@ The legacy path is kept for backward compatibility.
 
 import contextvars
 import os
+import time
 import uuid
 
 import httpx
@@ -19,7 +20,7 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 import mcp.types as types
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount, Route
 
 from locker_mcp.oauth_provider import LockerOAuthProvider
@@ -55,7 +56,7 @@ async def _tool_use_skill(skill_name: str, team_token: str) -> str:
     if not skill_name:
         raise ValueError("skill_name is required")
     token = str(uuid.uuid4())
-    async with httpx.AsyncClient() as http:
+    async with httpx.AsyncClient(timeout=10) as http:
         resp = await http.post(
             f"{_vault_url()}/internal/register-token",
             json={"token": token, "skill_name": skill_name},
@@ -106,7 +107,7 @@ def _auth_headers(team_token: str) -> dict:
 
 
 async def _get_skills(team_token: str) -> dict:
-    async with httpx.AsyncClient() as http:
+    async with httpx.AsyncClient(timeout=10) as http:
         resp = await http.get(
             f"{_vault_url()}/api/v1/employee/skills",
             headers=_auth_headers(team_token),
@@ -172,14 +173,37 @@ async def _tool_submit_feedback(
     if skill is None:
         return _skill_not_found_msg(skill_name, skills)
 
-    async with httpx.AsyncClient() as http:
+    async with httpx.AsyncClient(timeout=10) as http:
         resp = await http.post(
-            f"{_vault_url()}/api/v1/skills/{skill_id}/feedback",
+            f"{_vault_url()}/api/v1/skills/{skill['id']}/feedback",
             json={"feedback_text": final_text},
             headers=_auth_headers(team_token),
         )
         resp.raise_for_status()
     return f"Feedback submitted for skill '{skill_name}'."
+
+
+# ============================================================
+# SSE connection rate limiter (per-IP, in-memory with TTL)
+# ============================================================
+
+_SSE_RATE_LIMIT = 20  # max connections per window
+_SSE_RATE_WINDOW = 60  # seconds
+_sse_connections: dict[str, list[float]] = {}
+
+
+def _check_sse_rate_limit(client_ip: str) -> bool:
+    """Return True if the connection is allowed, False if rate-limited."""
+    now = time.monotonic()
+    timestamps = _sse_connections.get(client_ip, [])
+    # Prune expired entries for this IP
+    timestamps = [t for t in timestamps if now - t < _SSE_RATE_WINDOW]
+    if len(timestamps) >= _SSE_RATE_LIMIT:
+        _sse_connections[client_ip] = timestamps
+        return False
+    timestamps.append(now)
+    _sse_connections[client_ip] = timestamps
+    return True
 
 
 # ============================================================
@@ -294,6 +318,11 @@ _init_options = InitializationOptions(
 
 
 async def handle_sse(request: Request) -> Response:
+    # Rate limit SSE connections per IP
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_sse_rate_limit(client_ip):
+        return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
+
     # Prefer X-User-Token (PAT) over X-Team-Token for auth
     user_token = request.headers.get("x-user-token", "")
     team_token = request.headers.get("x-team-token", "")

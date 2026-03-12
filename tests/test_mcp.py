@@ -303,3 +303,53 @@ async def test_scoped_well_known_returns_200(client):
     data = r.json()
     assert "resource" in data
     assert data["resource"].endswith("/mcp/v2")
+
+
+# --- SSE connection rate limiting ---
+
+
+@pytest.mark.asyncio
+async def test_sse_rate_limit_rejects_after_threshold():
+    """SSE connections from the same IP are rejected after the limit."""
+    from locker_mcp.sse_server import _check_sse_rate_limit, _sse_connections, _SSE_RATE_LIMIT
+
+    # Clear state
+    _sse_connections.clear()
+    test_ip = "10.0.0.99"
+
+    # Fill up to the limit — all should be allowed
+    for _ in range(_SSE_RATE_LIMIT):
+        assert _check_sse_rate_limit(test_ip) is True
+
+    # Next connection should be rejected
+    assert _check_sse_rate_limit(test_ip) is False
+
+    # Different IP should still be allowed
+    assert _check_sse_rate_limit("10.0.0.100") is True
+
+    # Cleanup
+    _sse_connections.clear()
+
+
+@pytest.mark.asyncio
+async def test_sse_rate_limit_expires_after_window():
+    """SSE rate limit entries expire after the time window."""
+    import time
+    from unittest.mock import patch as mock_patch
+    from locker_mcp.sse_server import _check_sse_rate_limit, _sse_connections, _SSE_RATE_LIMIT, _SSE_RATE_WINDOW
+
+    _sse_connections.clear()
+    test_ip = "10.0.0.98"
+
+    # Fill to the limit
+    for _ in range(_SSE_RATE_LIMIT):
+        _check_sse_rate_limit(test_ip)
+
+    assert _check_sse_rate_limit(test_ip) is False
+
+    # Fast-forward past the window
+    future = time.monotonic() + _SSE_RATE_WINDOW + 1
+    with mock_patch("locker_mcp.sse_server.time.monotonic", return_value=future):
+        assert _check_sse_rate_limit(test_ip) is True
+
+    _sse_connections.clear()

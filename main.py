@@ -1,13 +1,22 @@
+import logging
 import os
-import re
+import time
+import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse
 
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.middleware.rate_limit import limiter, rate_limit_exceeded_handler
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("locker")
 from vault.db import init_db, close_db
 from src.auth.oauth import router as auth_router
 from vault.routes import router as vault_router
@@ -34,9 +43,32 @@ async def lifespan(app: FastAPI):
     await close_db()
 
 
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = str(uuid.uuid4())[:8]
+        # Identify caller: team token prefix or user ID
+        team_token = request.headers.get("x-team-token", "")
+        caller = f"team:{team_token[:8]}" if team_token else "anon"
+        start = time.monotonic()
+        try:
+            response = await call_next(request)
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            response.headers["X-Request-ID"] = request_id
+            logger.info(
+                "req=%s %s %s caller=%s status=%d %dms",
+                request_id, request.method, request.url.path, caller, response.status_code, elapsed_ms,
+            )
+            return response
+        except Exception:
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            logger.exception("req=%s %s %s caller=%s error %dms", request_id, request.method, request.url.path, caller, elapsed_ms)
+            raise
+
+
 app = FastAPI(title="Locker", lifespan=lifespan, routes=mcp_routes)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 
 # CORS for frontend on Vercel
@@ -71,39 +103,6 @@ async def oauth_protected_resource():
         "authorization_servers": [f"{_BASE_URL}/mcp/v2"],
         "bearer_methods_supported": ["header"],
     })
-
-
-UUID_RE = re.compile(r'^[0-9a-f\-]{36}$')
-
-@app.get("/setup/{team_token}", response_class=PlainTextResponse)
-@limiter.exempt
-async def setup_script(team_token: str, request: Request):
-    if not UUID_RE.match(team_token):
-        return PlainTextResponse("Invalid token format.", status_code=400)
-    server_url = str(request.base_url).rstrip("/")
-    skill_router_url = "https://raw.githubusercontent.com/ck22coding/locker-skill/main/locker.md"
-    script = f"""#!/bin/bash
-set -e
-echo "Setting up Locker..."
-python3 - <<'PYEOF'
-import json, pathlib
-p = pathlib.Path.home() / '.claude.json'
-cfg = json.loads(p.read_text()) if p.exists() else {{}}
-cfg.setdefault('mcpServers', {{}})['locker'] = {{
-    'type': 'sse',
-    'url': '{server_url}/mcp',
-    'headers': {{'X-Team-Token': '{team_token}'}}
-}}
-p.write_text(json.dumps(cfg, indent=2))
-print("MCP config written.")
-PYEOF
-mkdir -p ~/.claude/commands
-curl -fsSL {skill_router_url} -o ~/.claude/commands/locker.md
-echo "Skill router installed."
-echo ""
-echo "Done! Restart Claude Code, then try: /locker list_skills"
-"""
-    return PlainTextResponse(script, media_type="text/plain")
 
 
 app.include_router(auth_router)

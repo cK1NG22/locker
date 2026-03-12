@@ -22,7 +22,12 @@ async def _get_team_skills(team_id: str):
     )
     skills = []
     for row in rows:
-        content = decrypt(row["content"]) if row["visibility"] == "open" else None
+        content = None
+        if row["visibility"] == "open":
+            try:
+                content = decrypt(row["content"])
+            except Exception:
+                content = "[Error: skill content could not be decrypted — contact admin]"
         skills.append(EmployeeSkill(id=row["id"], name=row["name"], description=row["description"], content=content))
     return skills
 

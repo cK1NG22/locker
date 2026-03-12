@@ -27,6 +27,50 @@ from vault.models import (
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_user)])
 
 
+async def _check_and_replace_duplicate(
+    db, name: str, scope: str, uploaded_by: str, replace_skill_id: Optional[str], user_sub: str,
+) -> list[str] | JSONResponse | None:
+    """Check for duplicate skill names and handle replacement.
+
+    Returns:
+        list[str] — team IDs to re-link (replacement happened or no duplicate)
+        JSONResponse — 409 conflict response (caller should return this directly)
+
+    Raises:
+        HTTPException 409 for personal skill duplicates.
+    """
+    if scope == "personal":
+        dup = await db.fetchrow(
+            "SELECT 1 FROM skills WHERE name = $1 AND scope = 'personal' AND uploaded_by = $2",
+            name, uploaded_by,
+        )
+        if dup is not None:
+            raise HTTPException(status_code=409, detail=f"You already have a personal skill named '{name}'")
+        return []
+
+    if scope == "team":
+        dup = await db.fetchrow(
+            "SELECT id FROM skills WHERE name = $1 AND scope = 'team'",
+            name,
+        )
+        if dup is not None:
+            if replace_skill_id and replace_skill_id == dup["id"]:
+                team_rows = await db.fetch(
+                    "SELECT team_id FROM team_skills WHERE skill_id = $1", dup["id"],
+                )
+                replaced_team_ids = [r["team_id"] for r in team_rows]
+                await db.execute("DELETE FROM skills WHERE id = $1", dup["id"])
+                await audit(db, user_sub, "skill.replace", "skill", dup["id"], {"name": name})
+                return replaced_team_ids
+            else:
+                return JSONResponse(
+                    status_code=409,
+                    content={"detail": f"A team skill named '{name}' already exists", "existing_skill_id": dup["id"]},
+                )
+
+    return []
+
+
 @router.post("/skills", status_code=201, response_model=SkillCreated)
 async def create_skill(body: SkillCreate, user: dict = Depends(require_user)):
     skill_id = str(uuid.uuid4())
@@ -35,35 +79,10 @@ async def create_skill(body: SkillCreate, user: dict = Depends(require_user)):
     uploaded_by = user["sub"]
     db = get_db()
 
-    # Enforce per-user uniqueness for personal skills
-    if body.scope == "personal":
-        dup = await db.fetchrow(
-            "SELECT 1 FROM skills WHERE name = $1 AND scope = 'personal' AND uploaded_by = $2",
-            body.name, uploaded_by,
-        )
-        if dup is not None:
-            raise HTTPException(status_code=409, detail=f"You already have a personal skill named '{body.name}'")
-    # Enforce name uniqueness for team skills
-    replaced_team_ids: list[str] = []
-    if body.scope == "team":
-        dup = await db.fetchrow(
-            "SELECT id FROM skills WHERE name = $1 AND scope = 'team'",
-            body.name,
-        )
-        if dup is not None:
-            if body.replace_skill_id and body.replace_skill_id == dup["id"]:
-                # Save team links before deleting (CASCADE will remove them)
-                team_rows = await db.fetch(
-                    "SELECT team_id FROM team_skills WHERE skill_id = $1", dup["id"],
-                )
-                replaced_team_ids = [r["team_id"] for r in team_rows]
-                await db.execute("DELETE FROM skills WHERE id = $1", dup["id"])
-                await audit(db, user["sub"], "skill.replace", "skill", dup["id"], {"name": body.name})
-            else:
-                return JSONResponse(
-                    status_code=409,
-                    content={"detail": f"A team skill named '{body.name}' already exists", "existing_skill_id": dup["id"]},
-                )
+    result = await _check_and_replace_duplicate(db, body.name, body.scope, uploaded_by, body.replace_skill_id, user["sub"])
+    if isinstance(result, JSONResponse):
+        return result
+    replaced_team_ids = result
     await db.execute(
         "INSERT INTO skills (id, name, content, description, visibility, scope, uploaded_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
         skill_id, body.name, encrypted, body.description, body.visibility, body.scope, uploaded_by, now, now,
@@ -156,41 +175,16 @@ async def list_skills(name: Optional[str] = Query(default=None), user: dict = De
 
 @router.post("/skills/deploy-folder", status_code=201)
 async def deploy_folder(body: SkillFolderDeploy, user: dict = Depends(require_user)):
-    # Create the skill
     skill_id = str(uuid.uuid4())
     now = utc_now()
     encrypted_content = encrypt(body.content)
     uploaded_by = user["sub"]
     db = get_db()
-    # Enforce per-user uniqueness for personal skills
-    if body.scope == "personal":
-        dup = await db.fetchrow(
-            "SELECT 1 FROM skills WHERE name = $1 AND scope = 'personal' AND uploaded_by = $2",
-            body.name, uploaded_by,
-        )
-        if dup is not None:
-            raise HTTPException(status_code=409, detail=f"You already have a personal skill named '{body.name}'")
-    # Enforce name uniqueness for team skills
-    replaced_team_ids: list[str] = []
-    if body.scope == "team":
-        dup = await db.fetchrow(
-            "SELECT id FROM skills WHERE name = $1 AND scope = 'team'",
-            body.name,
-        )
-        if dup is not None:
-            if body.replace_skill_id and body.replace_skill_id == dup["id"]:
-                # Save team links before deleting (CASCADE will remove them)
-                team_rows = await db.fetch(
-                    "SELECT team_id FROM team_skills WHERE skill_id = $1", dup["id"],
-                )
-                replaced_team_ids = [r["team_id"] for r in team_rows]
-                await db.execute("DELETE FROM skills WHERE id = $1", dup["id"])
-                await audit(db, user["sub"], "skill.replace", "skill", dup["id"], {"name": body.name})
-            else:
-                return JSONResponse(
-                    status_code=409,
-                    content={"detail": f"A team skill named '{body.name}' already exists", "existing_skill_id": dup["id"]},
-                )
+
+    result = await _check_and_replace_duplicate(db, body.name, body.scope, uploaded_by, body.replace_skill_id, user["sub"])
+    if isinstance(result, JSONResponse):
+        return result
+    replaced_team_ids = result
     async with db.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
