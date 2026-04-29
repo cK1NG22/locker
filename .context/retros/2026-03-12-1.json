@@ -1,0 +1,25 @@
+{
+  "date": "2026-03-12",
+  "window": "7d",
+  "metrics": {
+    "commits": 57,
+    "merges": 8,
+    "prs_merged": 2,
+    "insertions": 14961,
+    "deletions": 2861,
+    "net_loc": 12100,
+    "test_loc": 2185,
+    "test_ratio": 0.15,
+    "active_days": 7,
+    "sessions": 15,
+    "deep_sessions": 3,
+    "avg_session_minutes": 24,
+    "loc_per_session_hour": 2450,
+    "feat_pct": 0.33,
+    "fix_pct": 0.23,
+    "peak_hour": 19
+  },
+  "version_range": ["phase3", "phase3"],
+  "streak_days": 1,
+  "tweetable": "Week of Mar 5: 57 commits, 14.9k LOC, 15% tests, 2 PRs, peak: 7pm PT | Streak: 1d (gap Mar 11)"
+}
