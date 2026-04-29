@@ -1,32 +1,19 @@
-# Locker — Product Specification
+# Locker — Variant Repository
 
-## Overview
-Locker is enterprise middleware for distributing AI coding skills across teams via the Model Context Protocol (MCP). Teams deploy skills once and every member gets them automatically in their AI coding assistant — no manual copying, no version drift.
+This repo houses multiple Locker variants for comparison. Restructured from single-codebase into variant-00 / variant-01 on 2026-04-29 (see commit `f3a302c` for pre-restructure snapshot, tag `pre-variant-restructure` for rollback).
 
-## Target User
-Team leads and engineering managers at 5–50 person firms using AI coding assistants (Claude Code, GitHub Copilot, Cursor). They need a way to share prompt-engineering knowledge without emailing markdown files or maintaining shared drives.
+## Variants
 
-## Value Proposition
-"Dropbox for AI Skills" — upload a skill to Locker, assign it to a team, and every member can invoke it instantly from their terminal. Skills stay encrypted at rest, usage is tracked, and feedback flows back to authors.
+- **`variant-00/`** — Original Locker MCP-fronted skills distribution (FastAPI + Postgres on Railway). The "Dropbox for AI Skills" build. See `variant-00/CLAUDE.md` for full product spec.
+- **`variant-01/`** — Supabase-as-COS-substrate, agent-as-principal (Optimal AI dogfood). Migrated from `~/Projects/mock-cos/scripts/` + Supabase ADRs on 2026-04-29. See `variant-01/CLAUDE.md` for scope rules.
 
-## Tech Stack
-- **Backend:** FastAPI (Python) — async, lightweight, auto-generated OpenAPI docs
-- **Frontend:** Next.js 16 + Tailwind CSS — hosted on Vercel
-- **Database:** PostgreSQL — hosted on Railway
-- **Auth:** Google OAuth 2.0 + JWT + team tokens + personal access tokens
-- **Protocol:** MCP (Model Context Protocol) — SSE transport for real-time skill delivery
-- **Encryption:** AES-256 via Python `cryptography` library
-- **Hosting:** Railway (backend + DB) + Vercel (frontend)
+## Working in this repo
 
-## Key Architecture Decisions
-1. **MCP over REST** — Skills are consumed inside AI coding assistants, which natively support MCP. REST would require a custom client; MCP integrates with zero code on the consumer side.
-2. **AES-256 encryption at rest** — Firm IP stored as skills must be protected. Encryption ensures database compromise doesn't expose proprietary knowledge.
-3. **Three visibility levels** (hidden / shared / open) — Gives admins granular control over which skills are discoverable vs. pushed vs. invisible to non-admins.
-4. **Railway + Vercel split** — Backend needs persistent connections (SSE, DB pooling); Railway handles that well. Frontend is static/SSR; Vercel is faster and free-tier friendly.
-5. **Google OAuth + invite codes** — Low-friction onboarding. New members join via invite link, sign in with Google, and are immediately on the team.
+- **Always work inside a variant directory.** Don't add code or docs at the repo root other than this file.
+- **Each variant is self-contained.** No imports across variants. They exist for comparison, not composition.
+- **Variant-00 still ships to Railway + Vercel.** Don't break the deploy when reorganizing.
+- **Variant-01 is gated.** Stage 1 of the Supabase build is BLOCKED on Carter creating the Supabase project in the dashboard. Don't unblock or run Stage 1 from this restructure work.
 
-## Live URLs
-- **Backend:** https://locker.up.railway.app
-- **Frontend:** https://locker-ui-three.vercel.app
-- **MCP endpoint:** https://locker.up.railway.app/mcp
-- **Health check:** https://locker.up.railway.app/health
+## Hub
+
+Project hub: `~/.claude/projects/-Users-carterking/memory/hub-locker.md` (renamed from `hub-locker-v2.md` on 2026-04-29 to retire the v1/v2 framing in favor of variants).
